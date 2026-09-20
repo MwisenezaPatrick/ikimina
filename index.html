@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ikimina Savings &amp; Loan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#ECEFE7; --card:#FBFCF9; --card-2:#F1F3EC;
+  --ink:#152018; --ink-2:#4C5A52; --ink-3:#7C8981;
+  --line:#CDD5C9; --line-2:#DEE3D9;
+  --green:#1D5A47; --green-2:#144536; --green-bg:#DCE8E0;
+  --brass:#8E6512; --brass-bg:#F1E7CD;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1613; --card:#161F1B; --card-2:#1C2622;
+    --ink:#E7EEE9; --ink-2:#A5B4AB; --ink-3:#7E8D85;
+    --line:#2A3733; --line-2:#222E29;
+    --green:#5FB492; --green-2:#4C9A7C; --green-bg:#16302716;
+    --brass:#D6A64A; --brass-bg:#2A230F;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1613; --card:#161F1B; --card-2:#1C2622;
+  --ink:#E7EEE9; --ink-2:#A5B4AB; --ink-3:#7E8D85;
+  --line:#2A3733; --line-2:#222E29;
+  --green:#5FB492; --green-2:#4C9A7C; --green-bg:#163027;
+  --brass:#D6A64A; --brass-bg:#2A230F;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:76px;-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.6}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;line-height:1.12;margin:0;letter-spacing:-.015em}
+p{margin:0}
+a{color:inherit}
+img{max-width:100%}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+/* ---------- nav ---------- */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb, var(--paper) 88%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 24px;max-width:1080px;margin:0 auto}
+.brand{display:flex;align-items:baseline;gap:9px;text-decoration:none;color:var(--ink)}
+.brand .mark{width:11px;height:11px;border-radius:3px;background:var(--green);box-shadow:5px 0 0 var(--brass),10px 0 0 var(--line);transform:translateY(-1px);flex:none}
+.brand b{font-family:Fraunces;font-size:18px;font-weight:600}
+.topnav{display:flex;align-items:center;gap:6px}
+.topnav a{padding:8px 12px;border-radius:8px;font-size:14.5px;color:var(--ink-2);text-decoration:none}
+.topnav a:hover{color:var(--ink);background:var(--card-2)}
+.signin{background:var(--green);color:#fff;padding:9px 17px;border-radius:8px;font-size:14.5px;font-weight:500;text-decoration:none;white-space:nowrap}
+:root[data-theme="dark"] .signin{color:#08140F}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .signin{color:#08140F}}
+.signin:hover{background:var(--green-2)}
+.menubtn{display:none;background:none;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:20px;line-height:1;color:var(--ink)}
+@media (max-width:760px){
+  .topnav a:not(.signin){display:none}
+  .menubtn{display:inline-block}
+  .signin{padding:8px 13px}
+}
+.mobilemenu{display:none;flex-direction:column;border-top:1px solid var(--line);padding:8px 24px 14px}
+.mobilemenu.open{display:flex}
+.mobilemenu a{padding:11px 4px;color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line-2);font-size:15px}
+.mobilemenu a:last-child{border-bottom:0}
+
+/* ---------- hero ---------- */
+.hero{padding:76px 0 64px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;top:-140px;right:-160px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle, var(--green-bg), transparent 70%);opacity:.9;pointer-events:none}
+.hero .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--green);background:var(--green-bg);padding:6px 13px;border-radius:99px;margin-bottom:22px}
+:root[data-theme="dark"] .hero .eyebrow{color:#8FDDB9}
+.hero h1{font-size:clamp(34px,5.4vw,56px);max-width:16ch;position:relative}
+.hero p.lede{font-size:18px;color:var(--ink-2);max-width:52ch;margin:22px 0 30px}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:9px;font-size:15px;font-weight:500;text-decoration:none;border:1px solid var(--line)}
+.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+:root[data-theme="dark"] .btn.primary{color:#08140F}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#08140F}}
+.btn.primary:hover{background:var(--green-2)}
+.btn.ghost{background:var(--card);color:var(--ink)}
+.btn.ghost:hover{border-color:var(--ink-3)}
+
+.stripcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:52px}
+.stripcards .c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.stripcards b{display:block;font-family:Fraunces;font-size:24px;font-weight:600}
+.stripcards span{font-size:13px;color:var(--ink-3)}
+
+/* ---------- sections ---------- */
+section{padding:64px 0}
+section.alt{background:var(--card)}
+.sechead{max-width:56ch;margin-bottom:38px}
+.sechead .kicker{font-size:13px;letter-spacing:.02em;color:var(--brass);margin-bottom:10px;display:block}
+.sechead h2{font-size:clamp(26px,3.4vw,34px)}
+.sechead p{color:var(--ink-2);margin-top:12px;font-size:15.5px}
+
+.about{display:grid;grid-template-columns:1.1fr .9fr;gap:44px;align-items:start}
+.about p{color:var(--ink-2);font-size:15.5px;margin-bottom:14px}
+.about p:last-child{margin-bottom:0}
+.about .accent{border-left:3px solid var(--brass);padding-left:16px;margin:22px 0}
+.about .accent p{color:var(--ink);font-size:16px;font-style:normal}
+.sidefacts{display:flex;flex-direction:column;gap:14px}
+.sidefacts .f{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.sidefacts .f b{display:block;font-family:Fraunces;font-size:15px;margin-bottom:4px}
+.sidefacts .f span{font-size:13.5px;color:var(--ink-2)}
+@media (max-width:820px){.about{grid-template-columns:1fr}}
+
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
+.step{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:22px 20px;position:relative}
+section.alt .step{background:var(--card-2)}
+.step .n{font-family:Fraunces;font-size:14px;color:var(--brass);margin-bottom:12px;display:block}
+.step h3{font-size:18px;margin-bottom:8px}
+.step p{font-size:14px;color:var(--ink-2)}
+
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.feature{background:var(--card);padding:24px}
+.feature h3{font-size:16.5px;margin-bottom:8px}
+.feature p{font-size:14px;color:var(--ink-2)}
+.feature .ico{width:34px;height:34px;border-radius:8px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:14px}
+:root[data-theme="dark"] .feature .ico{color:#8FDDB9}
+
+/* ---------- contact ---------- */
+.contactgrid{display:grid;grid-template-columns:1fr 1.1fr;gap:44px}
+@media (max-width:820px){.contactgrid{grid-template-columns:1fr}}
+.contactinfo .row{display:flex;gap:14px;margin-bottom:20px}
+.contactinfo .dot{width:34px;height:34px;border-radius:9px;background:var(--brass-bg);color:var(--brass);display:flex;align-items:center;justify-content:center;flex:none;font-size:15px}
+.contactinfo b{display:block;font-size:14.5px;margin-bottom:2px}
+.contactinfo span{font-size:14px;color:var(--ink-2)}
+.contactinfo a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line)}
+
+form.contact{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px}
+label.f{display:block;margin-bottom:15px}
+label.f span{display:block;font-size:13px;color:var(--ink-2);margin-bottom:6px}
+input,textarea,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card-2);color:var(--ink);font:inherit}
+textarea{resize:vertical;min-height:100px}
+.formnote{font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.sentok{display:none;background:var(--green-bg);color:var(--green);border-radius:8px;padding:10px 13px;font-size:13.5px;margin-bottom:14px}
+:root[data-theme="dark"] .sentok{color:#8FDDB9}
+.sentok.show{display:block}
+
+/* ---------- final cta / footer ---------- */
+.finalcta{background:var(--green);color:#fff;border-radius:18px;padding:44px 36px;display:flex;flex-wrap:wrap;gap:26px;align-items:center;justify-content:space-between}
+:root[data-theme="dark"] .finalcta{background:var(--green-2);color:#08140F}
+.finalcta h2{color:inherit;font-size:clamp(22px,3vw,30px);max-width:26ch}
+.finalcta p{color:inherit;opacity:.85;margin-top:8px;font-size:15px;max-width:44ch}
+.finalcta .btn.ghost{background:transparent;border-color:currentColor;color:inherit}
+.finalcta .btn.ghost:hover{background:rgba(255,255,255,.12)}
+
+footer{border-top:1px solid var(--line);padding:36px 0 calc(env(safe-area-inset-bottom,0px) + 30px)}
+.footgrid{display:flex;flex-wrap:wrap;justify-content:space-between;gap:24px}
+.footgrid .brand b{font-size:16px}
+.footgrid p{color:var(--ink-3);font-size:13.5px;margin-top:8px;max-width:30ch}
+.footlinks{display:flex;gap:34px;flex-wrap:wrap}
+.footlinks div b{display:block;font-size:12.5px;letter-spacing:.02em;color:var(--ink-3);margin-bottom:10px}
+.footlinks a{display:block;font-size:14px;color:var(--ink-2);text-decoration:none;margin-bottom:8px}
+.footlinks a:hover{color:var(--ink)}
+.footbottom{margin-top:30px;padding-top:20px;border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-3);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.themebtn{background:none;border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--ink-2);cursor:pointer}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="topbar">
+    <a class="brand" href="#top"><span class="mark"></span><b>Ikimina</b></a>
+    <nav class="topnav">
+      <a href="#about">About</a>
+      <a href="#how">How it works</a>
+      <a href="#contact">Contact</a>
+      <a class="signin" href="./ledger.html">Sign in</a>
+      <button class="menubtn" id="menuBtn" aria-label="Menu" aria-expanded="false">&#9776;</button>
+    </nav>
+  </div>
+  <div class="mobilemenu" id="mobileMenu">
+    <a href="#about">About</a>
+    <a href="#how">How it works</a>
+    <a href="#contact">Contact</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <span class="eyebrow">A community savings circle, kept honestly</span>
+      <h1>Save together. Borrow without losing track of who owes what.</h1>
+      <p class="lede">Ikimina is the rotating savings and loan group many East African households already know members save a fixed amount each month, and can borrow against what they've saved. This is that same group's book, kept where everyone can check it.</p>
+      <div class="ctas">
+        <a class="btn primary" href="./ledger.html">Sign in to your account</a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+      <div class="stripcards">
+        <div class="c"><b>Monthly</b><span>Fixed savings, every member, every month</span></div>
+        <div class="c"><b>&times;1.8</b><span>What your savings let you borrow</span></div>
+        <div class="c"><b>3 signatures</b><span>Two admins and a supervisor, on every loan</span></div>
+        <div class="c"><b>Shared</b><span>Interest earned comes back to members</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="about">
+    <div class="wrap">
+      <div class="sechead">
+        <span class="kicker">WHAT IKIMINA IS</span>
+        <h2>A savings group older than any app</h2>
+      </div>
+      <div class="about">
+        <div>
+          <p>An ikimina is a small group of people neighbours, colleagues, relatives who agree to save a set amount together every month and lend from that pool to members who need it. It runs on trust, a shared notebook, and whoever in the group is careful with numbers.</p>
+          <div class="accent"><p>The idea doesn't change here. What changes is who has to remember the arithmetic.</p></div>
+          <p>This system is that notebook, moved online for one specific group. It adds up what each person has saved, works out what they may borrow, and won't let a loan through until it has been approved the way your group agreed it should be by two different admins and a supervisor, in that order.</p>
+          <p>Nobody's balance depends on someone's memory of who paid in March. It's recorded once, and everyone with an account can see it.</p>
+        </div>
+        <div class="sidefacts">
+          <div class="f"><b>Built for one group</b><span>This ledger belongs to a specific ikimina and its members not a public marketplace.</span></div>
+          <div class="f"><b>Three roles</b><span>Members see the book. Admins record payments and sign off loans. A supervisor gives the final word.</span></div>
+          <div class="f"><b>Nothing hidden</b><span>Every payment, approval and repayment is on record, with who did it and when.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="how">
+    <div class="wrap">
+      <div class="sechead">
+        <span class="kicker">HOW IT WORKS</span>
+        <h2>From monthly saving to a loan in your hand</h2>
+        <p>The same four moves your group already makes on paper recorded automatically instead.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="n">01</span><h3>Save monthly</h3><p>Each member pays their fixed amount in. It's logged against their name for that month, and the group total updates on its own.</p></div>
+        <div class="step"><span class="n">02</span><h3>Request a loan</h3><p>A member can ask to borrow up to their total savings times the group's multiplier the ledger works out the limit and won't let a request pass it.</p></div>
+        <div class="step"><span class="n">03</span><h3>Get approved</h3><p>Two different admins sign off, then the supervisor. Nobody approves their own request, and the order can't be skipped.</p></div>
+        <div class="step"><span class="n">04</span><h3>Repay, and share the earnings</h3><p>The loan and its interest are due within the group's set window. Interest collected is shared back to members when the group decides to.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="sechead">
+        <span class="kicker">WHY IT HELPS</span>
+        <h2>What the book couldn't do for you</h2>
+      </div>
+      <div class="features">
+        <div class="feature"><div class="ico">&#8862;</div><h3>Limits calculate themselves</h3><p>A member's borrowing limit updates the moment their savings do no working it out by hand before a request.</p></div>
+        <div class="feature"><div class="ico">&#10003;</div><h3>Approvals can't be rushed</h3><p>A loan physically cannot reach "approved" without two separate admins and a supervisor, in order.</p></div>
+        <div class="feature"><div class="ico">&#128337;</div><h3>Due dates track themselves</h3><p>The repayment window starts the day money actually leaves the box, not the day it was requested.</p></div>
+        <div class="feature"><div class="ico">&#9776;</div><h3>One record, every device</h3><p>Whoever opens the ledger on a phone or a laptop sees the same numbers, updated as they happen.</p></div>
+        <div class="feature"><div class="ico">&#8901;</div><h3>A paper trail for every shilling</h3><p>Every payment and every approval is signed with a name and a date, kept for as long as the group runs.</p></div>
+        <div class="feature"><div class="ico">&#9733;</div><h3>Earnings, not just debts</h3><p>Interest the group earns from loans is tracked separately and shared out the way members agree to.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="contact">
+    <div class="wrap">
+      <div class="sechead">
+        <span class="kicker">GET IN TOUCH</span>
+        <h2>Questions about your account or the group</h2>
+        <p>If you've lost access, spotted something wrong on your ledger, or want to join, reach an admin directly.</p>
+      </div>
+      <div class="contactgrid">
+        <div class="contactinfo">
+          <div class="row"><div class="dot">&#9993;</div><div><b>Email an admin</b><span><a href="mailto:ndikumukizajules1@gmail.com">ndikumukizajules1@gmail.com</a></span></div></div>
+          <div class="row"><div class="dot">&#9737;</div><div><b>Supervisor</b><span><a href="mailto:patrick@gmail.com">patrick@gmail.com</a></span></div></div>
+          <div class="row"><div class="dot">&#128274;</div><div><b>Forgotten password?</b><span>Ask any admin to reset it from your member page — they can set a new one in a minute.</span></div></div>
+        </div>
+        <form class="contact" id="contactForm">
+          <div class="sentok" id="sentOk">Your message is ready — your email app should have opened to send it.</div>
+          <label class="f"><span>Your name</span><input type="text" id="c_name" required></label>
+          <label class="f"><span>Your email</span><input type="email" id="c_email" required></label>
+          <label class="f"><span>Message</span><textarea id="c_msg" required placeholder="I'd like to join the group / I can't find my savings for July / ..."></textarea></label>
+          <button class="btn primary" type="submit" style="width:100%;justify-content:center">Send message</button>
+          <p class="formnote">This opens your email app addressed to the group admin — nothing is sent from this page directly.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="finalcta">
+        <div><h2>Already a member?</h2><p>Sign in to see your savings, request a loan, or check where your last approval stands.</p></div>
+        <a class="btn ghost" href="./ledger.html">Sign in &rarr;</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footgrid">
+      <div class="brand" style="align-items:flex-start;flex-direction:column;display:flex;gap:8px">
+        <a class="brand" href="#top"><span class="mark"></span><b>Ikimina</b></a>
+        <p>A savings and loan ledger for one group, kept in the open for its members.</p>
+      </div>
+      <div class="footlinks">
+        <div><b>PAGES</b><a href="#about">About</a><a href="#how">How it works</a><a href="#contact">Contact</a></div>
+        <div><b>ACCOUNT</b><a href="./ledger.html">Sign in</a><a href="mailto:ndikumukizajules1@gmail.com">Email admin</a></div>
+      </div>
+    </div>
+    <div class="footbottom">
+      <span>Ikimina Savings &amp; Loan &middot; kept for its members</span>
+      <button class="themebtn" id="themeBtn">Light / dark</button>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  try { var t = localStorage.getItem("ikimina-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch(e){}
+
+  var menuBtn = document.getElementById("menuBtn"), mobileMenu = document.getElementById("mobileMenu");
+  menuBtn.addEventListener("click", function(){
+    var open = mobileMenu.classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  mobileMenu.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ mobileMenu.classList.remove("open"); }); });
+
+  document.getElementById("themeBtn").addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("ikimina-theme", next); } catch(e){}
+  });
+
+  document.getElementById("contactForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var name = document.getElementById("c_name").value.trim();
+    var email = document.getElementById("c_email").value.trim();
+    var msg = document.getElementById("c_msg").value.trim();
+    var body = "From: " + name + " (" + email + ")\n\n" + msg;
+    var href = "mailto:ndikumukizajules1@gmail.com?subject=" + encodeURIComponent("Ikimina — message from " + name) + "&body=" + encodeURIComponent(body);
+    window.location.href = href;
+    document.getElementById("sentOk").classList.add("show");
+  });
+})();
+</script>
+</body>
+</html>

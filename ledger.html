@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ikimina Savings &amp; Loan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E8EBE6; --card:#FBFCFA; --card-2:#F2F4F0;
+  --ink:#14221D; --ink-2:#4E5E57; --ink-3:#7C8C85;
+  --line:#CCD4CC; --line-2:#DDE3DC;
+  --green:#1D5A47; --green-bg:#DCE8E0;
+  --brass:#8E6512; --brass-bg:#F1E7CD;
+  --red:#8E2B2B; --red-bg:#F2DCDA;
+  --blue:#2B4C6B; --blue-bg:#DCE5EE;
+  --shadow:0 1px 0 rgba(20,34,29,.06), 0 6px 22px -14px rgba(20,34,29,.45);
+  --r:10px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1513; --card:#161F1C; --card-2:#1C2724;
+    --ink:#E6EDE8; --ink-2:#A2B2AA; --ink-3:#7D8D86;
+    --line:#2A3733; --line-2:#222E2A;
+    --green:#5FB492; --green-bg:#16302716;
+    --brass:#D6A64A; --brass-bg:#2A230F;
+    --red:#DC8078; --red-bg:#2E1917;
+    --blue:#87ACCC; --blue-bg:#16222C;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 8px 24px -16px #000;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1513; --card:#161F1C; --card-2:#1C2724;
+  --ink:#E6EDE8; --ink-2:#A2B2AA; --ink-3:#7D8D86;
+  --line:#2A3733; --line-2:#222E2A;
+  --green:#5FB492; --green-bg:#163027;
+  --brass:#D6A64A; --brass-bg:#2A230F;
+  --red:#DC8078; --red-bg:#2E1917;
+  --blue:#87ACCC; --blue-bg:#16222C;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+body{
+  margin:0;min-height:100%;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums;
+}
+h1,h2,h3{font-family:Fraunces,Georgia,"Times New Roman",serif;font-weight:600;line-height:1.15;margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:216px minmax(0,1fr);gap:26px;max-width:1180px;margin:0 auto;padding:22px 20px 40px}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);align-self:start}
+.brand{display:flex;gap:10px;align-items:baseline;margin:0 0 20px 8px}
+.brand .mark{width:12px;height:12px;border-radius:3px;background:var(--green);box-shadow:5px 0 0 var(--brass),10px 0 0 var(--line);flex:none;transform:translateY(-1px)}
+.brand h1{font-size:19px}
+.brand small{display:block;font-family:"IBM Plex Sans";font-size:11.5px;color:var(--ink-3);letter-spacing:.02em;font-weight:500}
+.nav{display:flex;flex-direction:column;gap:1px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;padding:9px 12px;border-radius:8px;color:var(--ink-2);cursor:pointer;font-size:14.5px}
+.nav button:hover{background:var(--card-2);color:var(--ink)}
+.nav button[aria-current="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.nav .badge{margin-left:auto;background:var(--brass);color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;font-family:"IBM Plex Sans"}
+:root[data-theme="dark"] .nav .badge,.dark-badge{color:#1a1405}
+.whoami{margin-top:18px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);font-size:12.5px;color:var(--ink-2);background:var(--card)}
+.whoami b{display:block;color:var(--ink);font-size:13.5px}
+.whoami .role{display:inline-block;margin-top:5px;font-size:11px;letter-spacing:.03em;color:var(--brass)}
+.railfoot{margin-top:12px;display:flex;gap:8px}
+.railfoot button{flex:1;font-size:12px;padding:6px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;color:var(--ink-2)}
+
+main{min-width:0}
+.pagehead{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.pagehead h2{font-size:26px}
+.pagehead p{margin:4px 0 0;color:var(--ink-2);font-size:13.5px;max-width:62ch}
+
+/* ---------- vault hero ---------- */
+.vault{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow);margin-bottom:22px}
+.vault .lead{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end;justify-content:space-between}
+.vault .amount{font-family:Fraunces;font-size:clamp(34px,7vw,52px);font-weight:600;letter-spacing:-.025em;line-height:1}
+.vault .amount span{font-size:.42em;color:var(--ink-3);font-weight:400;margin-left:6px}
+.vault .caption{color:var(--ink-2);font-size:13.5px;margin:0 0 6px}
+.vault .side{display:flex;gap:26px;flex-wrap:wrap}
+.vault .side div{min-width:96px}
+.vault .side b{display:block;font-family:Fraunces;font-size:20px;font-weight:600}
+.vault .side small{color:var(--ink-3);font-size:12px}
+.bar{display:flex;height:9px;border-radius:99px;overflow:hidden;background:var(--line-2);margin-top:20px}
+.bar i{display:block;height:100%}
+.bar i.avail{background:var(--green)}
+.bar i.out{background:var(--brass)}
+.barkey{display:flex;gap:18px;margin-top:9px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+.barkey span{display:flex;align-items:center;gap:6px}
+.barkey i{width:8px;height:8px;border-radius:2px;display:block}
+
+/* ---------- generic ---------- */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}
+.panel > header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line-2)}
+.panel > header h3{font-size:17px}
+.panel > header p{margin:2px 0 0;font-size:12.5px;color:var(--ink-3)}
+.panel .body{padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.stat b{display:block;font-family:Fraunces;font-size:23px;font-weight:600;letter-spacing:-.015em}
+.stat small{color:var(--ink-3);font-size:12.5px}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+.scroll{overflow-x:auto}
+th{text-align:left;font-weight:600;font-size:12.5px;color:var(--ink-3);padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--card-2)}
+td{padding:11px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;white-space:nowrap}
+.name{font-weight:500}
+.muted{color:var(--ink-3)}
+.mini{font-size:12.5px;color:var(--ink-2)}
+
+.dot{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:13px}
+.dot::before{content:"";width:8px;height:8px;border-radius:99px;flex:none;background:var(--ink-3)}
+.dot.ok::before{background:var(--green)}
+.dot.part::before{background:var(--brass)}
+.dot.no::before{background:var(--red)}
+.dot.info::before{background:var(--blue)}
+
+.tag{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2);background:var(--card-2);white-space:nowrap}
+.tag.green{color:var(--green);background:var(--green-bg);border-color:transparent}
+.tag.brass{color:var(--brass);background:var(--brass-bg);border-color:transparent}
+.tag.red{color:var(--red);background:var(--red-bg);border-color:transparent}
+.tag.blue{color:var(--blue);background:var(--blue-bg);border-color:transparent}
+
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#08140F}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#08140F}}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--red);border-color:var(--red)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.rowacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+
+label.f{display:block;margin-bottom:13px}
+label.f span{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:5px}
+input[type=text],input[type=number],input[type=date],input[type=month],select,textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card-2);
+}
+input:disabled{opacity:.6}
+.inline{display:flex;gap:12px;flex-wrap:wrap}
+.inline > *{flex:1 1 160px}
+.hint{font-size:12.5px;color:var(--ink-3);margin:-8px 0 13px}
+.err{font-size:13px;color:var(--red);background:var(--red-bg);border-radius:8px;padding:9px 11px;margin-bottom:12px}
+.empty{padding:34px 16px;text-align:center;color:var(--ink-3);font-size:14px}
+.empty b{display:block;color:var(--ink);font-family:Fraunces;font-size:17px;margin-bottom:5px;font-weight:600}
+
+/* ---------- loan chain / agreement ---------- */
+.chain{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 0}
+.step{flex:1 1 150px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--card-2)}
+.step .who{font-size:12.5px;color:var(--ink-3)}
+.step b{display:block;font-size:13.5px;margin-top:2px}
+.step.done{border-color:var(--green);background:var(--green-bg)}
+.step.done b{color:var(--green)}
+.step.next{border-style:dashed;border-color:var(--brass)}
+
+.stamp{border:1.5px solid var(--green);color:var(--green);border-radius:6px;padding:7px 10px;font-size:12px;line-height:1.3;transform:rotate(-1.4deg);background:transparent}
+.stamp b{display:block;font-size:13px;font-family:Fraunces}
+.agreement{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:26px}
+.agreement h3{font-size:19px;margin-bottom:3px}
+.agreement dl{display:grid;grid-template-columns:auto 1fr;gap:7px 18px;margin:18px 0;font-size:14px}
+.agreement dt{color:var(--ink-3)}
+.agreement dd{margin:0;text-align:right;font-weight:500}
+.agreement .sigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.sigbox{font-size:12.5px;color:var(--ink-3)}
+.sigbox .line{margin-top:20px;border-top:1px solid var(--line);padding-top:5px;color:var(--ink)}
+
+/* ---------- modal ---------- */
+.veil{position:fixed;inset:0;background:rgba(10,20,16,.5);display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto;z-index:40}
+.modal{background:var(--card);border-radius:14px;border:1px solid var(--line);width:100%;max-width:560px;box-shadow:0 30px 60px -20px rgba(0,0,0,.5);margin:auto}
+.modal > header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line-2)}
+.modal .body{padding:20px}
+.modal > footer{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+.x{border:0;background:none;font-size:22px;line-height:1;color:var(--ink-3);cursor:pointer;padding:2px 6px}
+.calcout{background:var(--card-2);border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13.5px}
+.calcout div{display:flex;justify-content:space-between;padding:3px 0}
+.calcout div.total{border-top:1px solid var(--line);margin-top:6px;padding-top:7px;font-weight:600;font-size:15px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 74px);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:99px;font-size:13.5px;z-index:60;box-shadow:0 10px 30px -10px rgba(0,0,0,.6)}
+.loading{padding:70px 20px;text-align:center;color:var(--ink-3)}
+
+
+/* ---------- charts ---------- */
+.chartgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+.cols{display:flex;align-items:flex-end;gap:8px;height:180px}
+.cols .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;height:100%;min-width:0}
+.cols .track{position:relative;flex:1;display:flex;align-items:flex-end;background:var(--card-2);border-radius:5px 5px 0 0;overflow:hidden}
+.cols .ghost{position:absolute;left:0;right:0;bottom:0;background:var(--line);opacity:.55}
+.cols .fill{position:relative;width:100%;border-radius:5px 5px 0 0;min-height:2px}
+.cols .val{font-size:11.5px;color:var(--ink-2);text-align:center}
+.cols .lbl{font-size:11px;color:var(--ink-3);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbars .row{margin-bottom:13px}
+.hbars .row:last-child{margin-bottom:0}
+.hbars .top{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;margin-bottom:5px}
+.hbars .track{height:10px;background:var(--card-2);border-radius:99px;overflow:hidden;display:flex}
+.hbars .fill{height:100%}
+.donut{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.legend{font-size:13px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.legend span{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
+.legend i{width:9px;height:9px;border-radius:2px;flex:none}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:14px;margin:0 0 18px}
+dl.kv dt{color:var(--ink-3)}
+dl.kv dd{margin:0;text-align:right;font-weight:500}
+input[type=password]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card-2)}
+
+/* ---------- mobile ---------- */
+.tabs{display:none}
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr;gap:0;padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 84px)}
+  .rail{position:static}
+  .nav{display:none}
+  .railfoot{margin-top:0;flex:0 0 auto;gap:6px}
+  .brand{margin-bottom:14px}
+  .whoami{margin-top:0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .vault{padding:18px}
+  .vault .side{gap:18px;width:100%}
+  .tabs{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .tabs button{flex:1;border:0;background:none;padding:9px 2px 10px;font-size:11px;color:var(--ink-3);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
+  .tabs button[aria-current="true"]{color:var(--green);font-weight:600}
+  .tabs .ico{font-size:17px;line-height:1}
+  .tabs .badge{position:absolute;top:4px;right:calc(50% - 20px);background:var(--brass);color:#fff;font-size:10px;padding:0 5px;border-radius:99px}
+  td,th{padding:10px}
+  .agreement{padding:18px}
+}
+@media print{
+  .rail,.tabs,.noprint{display:none!important}
+  body{background:#fff}
+  .shell{display:block;padding:0}
+  .agreement{border:0;box-shadow:none;padding:0}
+}
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Opening the ledger…</div></div>
+<div id="layer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ====== loaded from .env by the local server for testing ====== */
+window.SUPABASE_URL = "__SUPABASE_URL__";
+window.SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+/* =================================================================================== */
+</script>
+<script>
+
+/* ============================================================
+   Ikimina Savings & Loan — ledger with role logins
+   ============================================================ */
+const DEFAULTS = {
+  groupName: "Ikimina Savings & Loan",
+  monthlyContribution: 25000, loanMultiplier: 1.8, interestRate: 0.05,
+  repaymentDays: 45, blockConcurrentLoans: true, distribution: "equal", cycleStart: "2026-06"
+};
+
+const S = {
+  sb: null,
+  loaded: false, dbDown: false, configMissing: false, readOnly: false,
+  settings: null, people: [], savings: [], loans: [], repayments: [],
+  payouts: [], events: [], accounts: [], fees: [],
+  session: null, route: "dashboard", modal: null, period: null,
+  ledgerFor: null, toast: null, formErr: null, busy: false
+};
+
+const $ = (s, r) => (r || document).querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = n => Math.round(Number(n) || 0).toLocaleString("en-US");
+const money = n => num(n) + " RWF";
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const nowISO = () => new Date().toISOString();
+const thisPeriod = () => new Date().toISOString().slice(0, 7);
+
+function addDays(iso, d) { const t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); }
+function daysFromToday(iso) { return Math.round((new Date(iso + "T00:00:00Z") - new Date(todayISO() + "T00:00:00Z")) / 86400000); }
+function fmtDate(iso) { if (!iso) return "\u2014"; return new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); }
+function fmtPeriod(p) { return p ? new Date(p + "-01T00:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }) : "\u2014"; }
+function fmtPeriodShort(p) { return new Date(p + "-01T00:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" }); }
+function shiftPeriod(p, n) { const d = new Date(p + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 7); }
+function periodRange(from, to) { const o = []; let p = from, g = 0; while (p <= to && g++ < 600) { o.push(p); p = shiftPeriod(p, 1); } return o; }
+
+const cfg = () => Object.assign({}, DEFAULTS, S.settings || {});
+const personById = id => S.people.find(p => p.id === id) || null;
+const account = () => S.accounts.find(a => a.id === S.session) || null;
+const me = () => { const a = account(); return a ? personById(a.personId) : null; };
+const myRole = () => { const p = me(); return p ? p.role : null; };
+const roleLabel = role => ({ member: "Member", admin: "Admin", supervisor: "Supervisor" }[role] || "Member");
+const isAdmin = () => ["admin", "supervisor"].includes(myRole());
+const isSupervisor = () => myRole() === "supervisor";
+const canWrite = () => !S.readOnly;
+const activePeople = () => S.people.filter(p => p.status !== "inactive");
+const monthlyOf = p => Number(p && p.monthly) || cfg().monthlyContribution;
+
+/* ---------- savings ---------- */
+function memberSince(p) { return p.joined || cfg().cycleStart || thisPeriod(); }
+function openPeriods(p) { const s = memberSince(p), n = thisPeriod(); return s > n ? [] : periodRange(s, n); }
+function savingsFor(pid, per) { const r = S.savings.find(s => s.personId === pid && s.period === per); return r ? Number(r.amount) || 0 : 0; }
+function totalSaved(pid) { return S.savings.filter(s => s.personId === pid).reduce((a, s) => a + (Number(s.amount) || 0), 0); }
+function savingStatus(paid, req) { if (paid >= req) return "paid"; if (paid > 0) return "partial"; return "unpaid"; }
+function statusOf(p, per) { return savingStatus(savingsFor(p.id, per), monthlyOf(p)); }
+function arrears(pid) { const p = personById(pid); if (!p) return 0; const req = monthlyOf(p); return openPeriods(p).reduce((a, per) => a + Math.max(0, req - savingsFor(pid, per)), 0); }
+const groupContributions = () => S.savings.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+const feesTotal = () => S.fees.reduce((a, f) => a + (Number(f.amount) || 0), 0);
+const monthTotal = per => activePeople().reduce((a, p) => a + savingsFor(p.id, per), 0);
+const monthExpected = per => activePeople().filter(p => memberSince(p) <= per).reduce((a, p) => a + monthlyOf(p), 0);
+
+/* ---------- loans ---------- */
+const OPEN_STATES = ["pending_first", "pending_second", "pending_supervisor", "approved", "disbursed"];
+const STATE_LABEL = {
+  pending_first: "Waiting on first admin", pending_second: "Waiting on second admin",
+  pending_supervisor: "Waiting on supervisor", approved: "Approved, not yet paid out",
+  disbursed: "Money out", closed: "Repaid in full", rejected: "Rejected"
+};
+const STATE_TAG = { pending_first: "blue", pending_second: "blue", pending_supervisor: "blue", approved: "brass", disbursed: "brass", closed: "green", rejected: "red" };
+
+function loanRepaid(id) { return S.repayments.filter(r => r.loanId === id).reduce((a, r) => a + (Number(r.amount) || 0), 0); }
+function loanBalance(l) { return Math.max(0, (Number(l.total) || 0) - loanRepaid(l.id)); }
+function isOverdue(l) { return l.status === "disbursed" && l.dueDate && daysFromToday(l.dueDate) < 0; }
+function loansOf(pid) { return S.loans.filter(l => l.personId === pid); }
+function openLoansOf(pid) { return loansOf(pid).filter(l => OPEN_STATES.includes(l.status)); }
+const pendingLoans = () => S.loans.filter(l => (l.status || "").indexOf("pending") === 0);
+
+function splitPart(r, field) { const l = S.loans.find(x => x.id === r.loanId); if (!l || !l.total) return 0; return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total); }
+const interestCollected = () => S.repayments.reduce((a, r) => a + splitPart(r, "interest"), 0);
+const principalRepaid = () => S.repayments.reduce((a, r) => a + splitPart(r, "principal"), 0);
+function loanInterestPaid(id) { return S.repayments.filter(r => r.loanId === id).reduce((a, r) => a + splitPart(r, "interest"), 0); }
+const distributedEarnings = () => S.payouts.reduce((a, p) => a + (Number(p.total) || 0), 0);
+const disbursedPrincipal = () => S.loans.filter(l => l.disbursedAt).reduce((a, l) => a + (Number(l.principal) || 0), 0);
+const principalOut = () => Math.max(0, disbursedPrincipal() - principalRepaid());
+const committedPrincipal = () => S.loans.filter(l => l.status === "approved").reduce((a, l) => a + (Number(l.principal) || 0), 0);
+const earningsPool = () => interestCollected() - distributedEarnings();
+const boxTotal = () => groupContributions() + feesTotal() + interestCollected() - distributedEarnings();
+const cashAvailable = () => boxTotal() - principalOut();
+const lendable = () => Math.max(0, cashAvailable() - committedPrincipal());
+const maxLoanFor = pid => totalSaved(pid) * cfg().loanMultiplier;
+
+function validateLoanRequest(pid, amount) {
+  const p = personById(pid); const out = [];
+  if (!p) return ["Pick a member."];
+  if (p.status === "inactive") out.push("This member is not active in the group.");
+  if (!(amount > 0)) out.push("Enter a loan amount.");
+  const max = maxLoanFor(pid);
+  if (amount > max) out.push("Above this member's limit of " + money(max) + " (savings \u00d7 " + cfg().loanMultiplier + ").");
+  if (cfg().blockConcurrentLoans && openLoansOf(pid).length) out.push("This member already has a loan in progress.");
+  if (amount > lendable()) out.push("The group only has " + money(lendable()) + " free to lend right now.");
+  return out;
+}
+function quoteLoan(amount) { const i = Math.round(amount * cfg().interestRate); return { principal: Math.round(amount), interest: i, total: Math.round(amount) + i, days: cfg().repaymentDays }; }
+function nextLoanNumber() { const y = new Date().getFullYear(); const n = S.loans.filter(l => (l.number || "").indexOf("LN-" + y) === 0).length + 1; return "LN-" + y + "-" + String(n).padStart(4, "0"); }
+
+function nextApprovalOpenToMe(l) {
+  if (!canWrite() || !me()) return false;
+  const a = l.approvals || {};
+  if (l.personId === me().id) return false;
+  if (l.status === "pending_first") return isAdmin();
+  if (l.status === "pending_second") return isAdmin() && a.first && a.first.byId !== me().id;
+  if (l.status === "pending_supervisor") return isSupervisor() && (!a.first || a.first.byId !== me().id) && (!a.second || a.second.byId !== me().id);
+  return false;
+}
+const actionCount = () => (isAdmin() ? S.loans.filter(nextApprovalOpenToMe).length : 0);
+
+/* ---------- writes ---------- */
+function splitPath(path) { const i = path.indexOf("/"); return { table: "ikimina_" + path.slice(0, i), id: path.slice(i + 1) }; }
+async function put(path, data) {
+  if (!S.sb) return;
+  const { table, id } = splitPath(path);
+  const { error } = await S.sb.from(table).upsert({ id, data, updated_at: new Date().toISOString() });
+  if (error) { toast("That didn't save. Try again."); throw error; }
+}
+async function drop(path) {
+  if (!S.sb) return;
+  const { table, id } = splitPath(path);
+  try { await S.sb.from(table).delete().eq("id", id); } catch (e) {}
+}
+async function logEvent(action, detail) {
+  const id = uid(); const p = me();
+  try { await S.db.doc("events/" + id).set({ id, at: nowISO(), by: p ? p.name : "System", action, detail: detail || "" }); } catch (e) {}
+}
+function toast(m) { S.toast = m; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { S.toast = null; render(); }, 2600); }
+
+/* ---------- passwords ---------- */
+async function hashPw(pw) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ikimina:" + pw));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+/* ============================================================
+   Seed — the contribution book
+   ============================================================ */
+const BOOK = [
+  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000 },
+  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000 },
+  { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
+  { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
+  { id: "chadia", name: "Chadia", monthly: 25000, role: "admin", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
+  { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", pw: "Ramathan", loan: 0 },
+  { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", pw: "Charlotte", loan: 0 },
+  { id: "patrick", name: "Patrick", monthly: 25000, role: "supervisor", email: "patrick@gmail.com", pw: "Patrick", loan: 0 }
+];
+const BOOK_MONTHS = ["2026-06", "2026-07", "2026-08", "2026-09"];
+
+async function seedBook() {
+  S.busy = true; render();
+  if (!S.settings) await put("config/settings", Object.assign({}, DEFAULTS, { cycleStart: "2026-06", createdAt: nowISO() }));
+  let n = 1;
+  for (const b of BOOK) {
+    await put("people/" + b.id, {
+      id: b.id, name: b.name, monthly: b.monthly, role: b.role, status: "active",
+      joined: "2026-06", phone: "", email: b.email, createdAt: nowISO()
+    });
+    await put("accounts/acc_" + b.id, {
+      id: "acc_" + b.id, personId: b.id, email: b.email.toLowerCase(),
+      passHash: await hashPw(b.pw), createdAt: nowISO()
+    });
+    for (const m of BOOK_MONTHS) {
+      await put("savings/" + b.id + "__" + m, { id: b.id + "__" + m, personId: b.id, period: m, amount: b.monthly, recordedAt: nowISO(), recordedBy: "Contribution book" });
+    }
+    if (b.fee) await put("fees/fee_" + b.id, { id: "fee_" + b.id, personId: b.id, amount: b.fee, label: "Rate contribution (1%)", at: "2026-09-01" });
+    if (b.loan) {
+      const rate = 0.03, interest = Math.round(b.loan * rate);
+      const lid = "loan_" + b.id;
+      const stamp = who => ({ byId: "jules", name: who, at: "2026-09-01T00:00:00.000Z" });
+      await put("loans/" + lid, {
+        id: lid, number: "LN-2026-" + String(n++).padStart(4, "0"), personId: b.id,
+        principal: b.loan, rate, interest, total: b.loan + interest, days: 45,
+        status: "disbursed", savingsAtRequest: b.monthly * 4, maxAtRequest: b.monthly * 4 * 1.8,
+        approvals: { first: stamp("Contribution book"), second: stamp("Contribution book"), supervisor: stamp("Contribution book") },
+        requestedAt: "2026-09-01T00:00:00.000Z", disbursedAt: "2026-09-01", dueDate: addDays("2026-09-01", 45),
+        fromBook: true
+      });
+    }
+  }
+  await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Sep 2026");
+  S.busy = false;
+  toast("Contribution book loaded");
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+const TABLES = ["people", "savings", "loans", "repayments", "payouts", "events", "accounts", "fees"];
+
+async function fetchTable(name) {
+  const { data, error } = await S.sb.from("ikimina_" + name).select("data");
+  if (error) throw error;
+  return data.map(r => r.data);
+}
+async function fetchSettings() {
+  const { data, error } = await S.sb.from("ikimina_config").select("data").eq("id", "settings").maybeSingle();
+  if (error) throw error;
+  return data ? data.data : null;
+}
+
+async function boot() {
+  S.period = thisPeriod();
+  try { S.session = localStorage.getItem("ikimina-session"); } catch (e) {}
+
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY || window.SUPABASE_URL.indexOf("YOUR-PROJECT") >= 0) {
+    S.configMissing = true; S.loaded = true; render(); return;
+  }
+  if (!window.supabase) { S.dbDown = true; S.loaded = true; render(); return; }
+
+  S.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+  try {
+    S.settings = await fetchSettings();
+    for (const t of TABLES) S[t] = await fetchTable(t);
+  } catch (e) { S.dbDown = true; S.loaded = true; render(); return; }
+
+  S.loaded = true; render();
+
+  const refetch = async (t) => { try { S[t] = await fetchTable(t); render(); } catch (e) {} };
+  const refetchSettings = async () => { try { S.settings = await fetchSettings(); render(); } catch (e) {} };
+
+  const ch = S.sb.channel("ikimina-live");
+  ch.on("postgres_changes", { event: "*", schema: "public", table: "ikimina_config" }, refetchSettings);
+  TABLES.forEach(t => {
+    ch.on("postgres_changes", { event: "*", schema: "public", table: "ikimina_" + t }, () => refetch(t));
+  });
+  ch.subscribe();
+}
+
+/* ============================================================
+   Charts (CSS/SVG, no libraries)
+   ============================================================ */
+function cols(rows, color) {
+  const max = Math.max(1, ...rows.map(r => Math.max(r.value, r.target || 0)));
+  return '<div class="cols">' + rows.map(r => {
+    const h = (r.value / max) * 100, t = ((r.target || 0) / max) * 100;
+    return '<div class="col"><div class="track">' +
+      (r.target ? '<div class="ghost" style="height:' + t + '%"></div>' : "") +
+      '<div class="fill" style="height:' + h + '%;background:' + (color || "var(--green)") + '"></div></div>' +
+      '<div class="val">' + (r.value >= 1000 ? Math.round(r.value / 1000) + "k" : num(r.value)) + '</div>' +
+      '<div class="lbl">' + esc(r.label) + '</div></div>';
+  }).join("") + '</div>';
+}
+
+function hbars(rows) {
+  const max = Math.max(1, ...rows.map(r => r.total));
+  return '<div class="hbars">' + rows.map(r =>
+    '<div class="row"><div class="top"><span class="name">' + esc(r.label) + '</span>' +
+    '<span class="mini">' + esc(r.right || "") + '</span></div>' +
+    '<div class="track">' + (r.parts || []).map(p =>
+      '<div class="fill" style="width:' + (p.value / max * 100) + '%;background:' + p.color + '"></div>').join("") +
+    '</div></div>').join("") + '</div>';
+}
+
+function donut(parts) {
+  const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+  const R = 52, C = 2 * Math.PI * R;
+  let off = 0;
+  const rings = parts.filter(p => p.value > 0).map(p => {
+    const len = (p.value / total) * C;
+    const el = '<circle cx="64" cy="64" r="' + R + '" fill="none" stroke="' + p.color + '" stroke-width="20" ' +
+      'stroke-dasharray="' + len + ' ' + (C - len) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 64 64)"></circle>';
+    off += len; return el;
+  }).join("");
+  return '<div class="donut"><svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">' +
+    '<circle cx="64" cy="64" r="' + R + '" fill="none" stroke="var(--card-2)" stroke-width="20"></circle>' + rings +
+    '<text x="64" y="60" text-anchor="middle" font-size="24" font-family="Fraunces" fill="var(--ink)">' + total + '</text>' +
+    '<text x="64" y="78" text-anchor="middle" font-size="10" fill="var(--ink-3)">loans</text></svg>' +
+    '<div class="legend">' + parts.map(p => '<span><i style="background:' + p.color + '"></i>' + esc(p.label) + ' &middot; ' + p.value + '</span>').join("") + '</div></div>';
+}
+
+/* ============================================================
+   Shell
+   ============================================================ */
+function navFor(role) {
+  if (role === "member") return [
+    { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
+    { k: "savings", label: "Savings" }, { k: "loans", label: "Loans" },
+    { k: "earnings", label: "Earnings" }, { k: "request", label: "Request a loan", ask: true },
+    { k: "profile", label: "Profile" }
+  ];
+  return [
+    { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
+    { k: "savings", label: "Savings" }, { k: "loans", label: "Loans" },
+    { k: "requested", label: "Requested Loan" },
+    { k: "earnings", label: "Earnings" }, { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
+  ];
+}
+
+function render() {
+  const root = $("#root");
+  if (!root || !S.loaded) return;
+  if (S.configMissing) {
+    root.innerHTML = '<div class="shell" style="grid-template-columns:1fr;max-width:560px"><main><div class="panel"><div class="empty"><b>Database not connected yet</b>Open <code>index-config.js</code> (or the config block in this file) and paste in your Supabase project URL and anon key, then reload.</div></div></main></div>';
+    return;
+  }
+  if (S.dbDown) {
+    root.innerHTML = '<div class="shell"><main><div class="panel"><div class="empty"><b>The ledger could not reach its database</b>Check that the Supabase URL and key are correct, that the schema has been run, and that you have a connection, then reload.</div></div></main></div>';
+    return;
+  }
+  if (!S.accounts.length) { root.innerHTML = seedView(); $("#layer").innerHTML = ""; wire(); return; }
+  if (!me()) { root.innerHTML = loginView(); $("#layer").innerHTML = ""; wire(); return; }
+
+  const c = cfg(), n = actionCount(), nav = navFor(myRole());
+  if (!nav.some(i => i.k === S.route && !i.ask)) S.route = "dashboard";
+  const tab = i => i.ask
+    ? '<button data-act="modal" data-m="request" aria-current="false">' + i.label + '</button>'
+    : '<button data-act="go" data-k="' + i.k + '" aria-current="' + (S.route === i.k) + '">' + i.label +
+      (i.k === "loans" && n ? '<span class="badge">' + n + '</span>' : '') + '</button>';
+
+  root.innerHTML =
+    '<div class="shell"><div class="rail">' +
+      '<div class="brand"><span class="mark"></span><div><h1>' + esc(c.groupName) + '</h1><small>Savings &amp; loan ledger</small></div></div>' +
+      '<nav class="nav">' + nav.map(tab).join("") + '</nav>' + whoAmI() +
+    '</div><main>' + page() + '</main></div>' +
+    '<nav class="tabs">' + nav.filter(i => !i.ask).slice(0, 4).concat(nav.filter(i => i.k === "profile")).map(tab).join("") + '</nav>' +
+    (S.toast ? '<div class="toast">' + esc(S.toast) + '</div>' : "");
+  $("#layer").innerHTML = S.modal ? modalView() : "";
+  wire();
+}
+
+function whoAmI() {
+  const p = me(), a = account();
+  const word = { member: "Member", admin: "Admin", supervisor: "Supervisor" };
+  return '<div class="whoami"><b>' + esc(p.name) + '</b><span class="role">' + word[p.role] + '</span>' +
+    '<div class="mini" style="margin-top:3px">' + esc(a ? a.email : "") + '</div>' +
+    (S.readOnly ? '<div class="mini">View only</div>' : "") +
+    '<div class="railfoot"><button data-act="theme">Theme</button><button data-act="logout">Sign out</button></div></div>';
+}
+
+function page() {
+  switch (S.route) {
+    case "members": return S.ledgerFor ? ledgerView() : membersView();
+    case "savings": return savingsView();
+    case "loans": return loansView();
+    case "requested": return requestedLoansView();
+    case "earnings": return earningsView();
+    case "profile": return profileView();
+    case "settings": return settingsView();
+    default: return isAdmin() ? adminDashboard() : memberDashboard();
+  }
+}
+
+/* ============================================================
+   Seed + login
+   ============================================================ */
+function seedView() {
+  return '<div class="shell" style="grid-template-columns:1fr;max-width:560px"><main>' +
+    '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
+    '<div class="panel"><div class="body">' +
+    '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to September 2026, the three loans running, and Chadia\u2019s 250 rate contribution. Sign-in accounts are created for everyone.</p>' +
+    '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
+    '</div></div></main></div>';
+}
+
+function loginView() {
+  return '<div class="shell" style="grid-template-columns:1fr;max-width:420px"><main>' +
+    '<div class="brand" style="margin:30px 0 22px"><span class="mark"></span><div><h1>' + esc(cfg().groupName) + '</h1><small>Savings &amp; loan ledger</small></div></div>' +
+    '<div class="panel"><div class="body">' +
+    '<h3 style="margin-bottom:14px">Sign in</h3>' +
+    (S.formErr ? '<div class="err">' + esc(S.formErr) + '</div>' : "") +
+    '<label class="f"><span>Email</span><input type="text" id="li_email" autocomplete="username" placeholder="you@example.com"></label>' +
+    '<label class="f"><span>Password</span><input type="password" id="li_pw" autocomplete="current-password" data-act="loginkey"></label>' +
+    '<button class="btn primary" data-act="login" style="width:100%;justify-content:center">Sign in</button>' +
+    '<p class="hint" style="margin:14px 0 0">Ask an admin if you have forgotten your password. They can set a new one for you from the members list.</p>' +
+    '</div></div></main></div>';
+}
+
+/* ============================================================
+   Dashboards
+   ============================================================ */
+function vaultHero() {
+  const box = boxTotal(), out = principalOut(), avail = cashAvailable();
+  const pctOut = box > 0 ? Math.min(100, (out / box) * 100) : 0;
+  return '<section class="vault"><div class="lead"><div>' +
+    '<p class="caption">In the box today</p><div class="amount">' + num(box) + '<span>RWF</span></div></div>' +
+    '<div class="side">' +
+      '<div><b>' + num(groupContributions()) + '</b><small>Saved by members</small></div>' +
+      '<div><b>' + num(feesTotal()) + '</b><small>Rate contributions</small></div>' +
+      '<div><b>' + num(interestCollected()) + '</b><small>Interest earned</small></div>' +
+    '</div></div>' +
+    '<div class="bar"><i class="out" style="width:' + pctOut + '%"></i><i class="avail" style="width:' + (100 - pctOut) + '%"></i></div>' +
+    '<div class="barkey"><span><i style="background:var(--brass)"></i>' + money(out) + ' out on loan</span>' +
+    '<span><i style="background:var(--green)"></i>' + money(avail) + ' in hand</span>' +
+    (committedPrincipal() ? '<span class="muted">' + money(committedPrincipal()) + ' approved, awaiting payout</span>' : "") + '</div></section>';
+}
+
+function lastMonths(k) {
+  const start = cfg().cycleStart || thisPeriod();
+  const all = periodRange(start, thisPeriod());
+  return all.slice(Math.max(0, all.length - k));
+}
+
+function adminDashboard() {
+  const per = thisPeriod();
+  const people = activePeople();
+  const paid = people.filter(p => statusOf(p, per) === "paid").length;
+  const partial = people.filter(p => statusOf(p, per) === "partial").length;
+  const months = lastMonths(8);
+  const live = S.loans.filter(l => l.status === "disbursed" || l.status === "approved");
+  const pend = pendingLoans();
+
+  return '<div class="pagehead"><div><h2>Dashboard</h2><p>Where the group\u2019s money is sitting, and what needs a decision.</p></div>' +
+    (canWrite() ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
+    vaultHero() +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + people.length + '</b><small>Active members</small></div>' +
+      '<div class="stat"><b>' + money(monthExpected(per)) + '</b><small>Due this month</small></div>' +
+      '<div class="stat"><b>' + paid + " / " + people.length + '</b><small>Paid in full' + (partial ? ", " + partial + " part paid" : "") + '</small></div>' +
+      '<div class="stat"><b>' + money(earningsPool()) + '</b><small>Interest not yet shared</small></div>' +
+    '</div>' +
+
+    '<div class="chartgrid">' +
+      '<section class="panel"><header><div><h3>Savings collected</h3><p>Against what was due each month</p></div></header><div class="body">' +
+        cols(months.map(m => ({ label: fmtPeriodShort(m), value: monthTotal(m), target: monthExpected(m) }))) +
+        '<div class="barkey" style="margin-top:12px"><span><i style="background:var(--green)"></i>Collected</span><span><i style="background:var(--line)"></i>Expected</span></div>' +
+      '</div></section>' +
+
+      '<section class="panel"><header><div><h3>Loans out</h3><p>How much of each loan has come back</p></div></header><div class="body">' +
+        (live.length ? hbars(live.map(l => ({
+          label: (personById(l.personId) || {}).name || "?",
+          right: money(loanRepaid(l.id)) + " of " + money(l.total),
+          parts: [{ value: loanRepaid(l.id), color: "var(--green)" }, { value: loanBalance(l), color: "var(--brass)" }]
+        }))) + '<div class="barkey" style="margin-top:6px"><span><i style="background:var(--green)"></i>Repaid</span><span><i style="background:var(--brass)"></i>Still out</span></div>'
+        : '<p class="mini">No money is out on loan.</p>') +
+      '</div></section>' +
+
+      '<section class="panel"><header><div><h3>Approvals</h3><p>Where each loan sits in the chain</p></div></header><div class="body">' +
+        donut([
+          { label: "Waiting on first admin", value: S.loans.filter(l => l.status === "pending_first").length, color: "var(--blue)" },
+          { label: "Waiting on second admin", value: S.loans.filter(l => l.status === "pending_second").length, color: "#7FA8CC" },
+          { label: "Waiting on supervisor", value: S.loans.filter(l => l.status === "pending_supervisor").length, color: "var(--brass)" },
+          { label: "Approved and paid out", value: S.loans.filter(l => l.status === "approved" || l.status === "disbursed").length, color: "var(--green)" },
+          { label: "Closed or rejected", value: S.loans.filter(l => l.status === "closed" || l.status === "rejected").length, color: "var(--line)" }
+        ]) +
+      '</div></section>' +
+
+      '<section class="panel"><header><div><h3>Interest per loan</h3><p>Expected against collected</p></div></header><div class="body">' +
+        (S.loans.length ? hbars(S.loans.map(l => ({
+          label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + (l.rate * 100) + "%",
+          right: money(loanInterestPaid(l.id)) + " of " + money(l.interest),
+          parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: l.interest - loanInterestPaid(l.id), color: "var(--line)" }]
+        }))) : '<p class="mini">No loans recorded yet.</p>') +
+      '</div></section>' +
+    '</div>' +
+
+    (pend.length ? '<section class="panel" style="margin-top:18px"><header><div><h3>Waiting for a decision</h3>' +
+      '<p>Two different admins, then the supervisor.</p></div></header><div class="scroll"><table><tbody>' +
+      pend.map(loanRow).join("") + '</tbody></table></div></section>' : "") +
+
+    (S.loans.filter(isOverdue).length ? '<section class="panel"><header><div><h3>Past the due date</h3></div></header>' +
+      '<div class="scroll"><table><tbody>' + S.loans.filter(isOverdue).map(loanRow).join("") + '</tbody></table></div></section>' : "");
+}
+
+function memberDashboard() {
+  const p = me(), c = cfg();
+  const months = lastMonths(8);
+  const saved = totalSaved(p.id), limit = maxLoanFor(p.id);
+  const open = openLoansOf(p.id)[0];
+  const owed = arrears(p.id);
+  const pool = earningsPool();
+  const myShare = shareOut(pool, activePeople())[p.id] || 0;
+
+  return '<div class="pagehead"><div><h2>Hello, ' + esc(p.name.split(" ")[0]) + '</h2>' +
+    '<p>Your savings, what you may borrow, and how your loan is going.</p></div>' +
+    (canWrite() && !open ? '<button class="btn primary" data-act="modal" data-m="request">Request a loan</button>' : "") + '</div>' +
+
+    '<section class="vault"><div class="lead"><div><p class="caption">Your total savings</p>' +
+    '<div class="amount">' + num(saved) + '<span>RWF</span></div></div>' +
+    '<div class="side"><div><b>' + num(limit) + '</b><small>You may borrow up to</small></div>' +
+    '<div><b>' + num(monthlyOf(p)) + '</b><small>Your monthly share</small></div>' +
+    '<div><b>' + num(owed) + '</b><small>Behind on savings</small></div></div></div></section>' +
+
+    '<div class="chartgrid">' +
+      '<section class="panel"><header><div><h3>What you have paid in</h3><p>Month by month</p></div></header><div class="body">' +
+        cols(months.map(m => ({ label: fmtPeriodShort(m), value: savingsFor(p.id, m), target: memberSince(p) <= m ? monthlyOf(p) : 0 }))) +
+      '</div></section>' +
+
+      '<section class="panel"><header><div><h3>Your loan</h3></div></header><div class="body">' +
+        (open ? '<div class="calcout"><div><span>Loan</span><b>' + money(open.principal) + '</b></div>' +
+          '<div><span>Interest at ' + (open.rate * 100) + '%</span><b>' + money(open.interest) + '</b></div>' +
+          '<div><span>Repaid so far</span><b>' + money(loanRepaid(open.id)) + '</b></div>' +
+          '<div class="total"><span>Still owing</span><b>' + money(loanBalance(open)) + '</b></div></div>' +
+          hbars([{ label: open.number, right: open.dueDate ? "due " + fmtDate(open.dueDate) : "not paid out yet",
+            parts: [{ value: loanRepaid(open.id), color: "var(--green)" }, { value: loanBalance(open), color: "var(--brass)" }] }]) +
+          chainView(open) +
+          '<button class="btn small" data-act="loan" data-id="' + open.id + '" style="margin-top:12px">Open the agreement</button>'
+        : '<p class="mini">You have no loan running. Your limit is ' + money(limit) + ', and the group has ' + money(lendable()) + ' free to lend.</p>') +
+      '</div></section>' +
+    '</div>' +
+
+    '<div class="grid2" style="margin-top:18px">' +
+      '<div class="stat"><b>' + money(myShare) + '</b><small>Your share if earnings were split today</small></div>' +
+      '<div class="stat"><b>' + money(boxTotal()) + '</b><small>In the group box</small></div>' +
+      '<div class="stat"><b>' + activePeople().length + '</b><small>Members saving with you</small></div>' +
+    '</div>' +
+
+    (loansOf(p.id).length ? '<section class="panel" style="margin-top:18px"><header><div><h3>Your loan history</h3></div></header>' +
+      '<div class="scroll"><table><tbody>' + loansOf(p.id).map(loanRow).join("") + '</tbody></table></div></section>' : "");
+}
+
+function loanRow(l) {
+  const p = personById(l.personId), over = isOverdue(l);
+  const days = l.dueDate ? daysFromToday(l.dueDate) : null;
+  return '<tr data-act="loan" data-id="' + l.id + '" style="cursor:pointer">' +
+    '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div></td>' +
+    '<td class="num">' + money(l.principal) + '<div class="mini">repay ' + money(l.total) + '</div></td>' +
+    '<td><span class="tag ' + (over ? "red" : STATE_TAG[l.status]) + '">' + (over ? "Overdue" : STATE_LABEL[l.status]) + '</span>' +
+      (l.status === "disbursed" && days !== null ? '<div class="mini">' + (days >= 0 ? days + " days left" : (-days) + " days late") + '</div>' : "") + '</td>' +
+    '<td class="num"><div class="rowacts">' +
+      (nextApprovalOpenToMe(l) ? '<button class="btn small primary" data-act="approve" data-id="' + l.id + '">Approve</button>' : "") +
+      '<span class="btn small">Open</span></div></td></tr>';
+}
+
+/* ============================================================
+   Members
+   ============================================================ */
+function membersView() {
+  return '<div class="pagehead"><div><h2>Members</h2><p>Everyone saving with the group, what they have put in, and what they may borrow.</p></div>' +
+    (isAdmin() && canWrite() ? '<button class="btn primary" data-act="modal" data-m="member">Add a member</button>' : "") + '</div>' +
+    '<section class="panel">' + (S.people.length ?
+    '<div class="scroll"><table><thead><tr><th>Name</th><th>Role</th><th class="num">Monthly</th><th class="num">Months paid</th>' +
+    '<th class="num">Total savings</th><th class="num">Limit</th><th class="num">Owing</th><th></th></tr></thead><tbody>' +
+    S.people.map(p => {
+      const ops = openPeriods(p), req = monthlyOf(p);
+      const full = ops.filter(per => savingsFor(p.id, per) >= req).length;
+      const owed = arrears(p.id), open = openLoansOf(p.id)[0];
+      return '<tr><td><span class="name">' + esc(p.name) + '</span>' +
+        (p.status === "inactive" ? ' <span class="tag">Inactive</span>' : "") +
+        (me() && p.id === me().id ? ' <span class="tag blue">You</span>' : "") +
+        (p.email ? '<div class="mini">' + esc(p.email) + '</div>' : "") + '</td>' +
+        '<td class="mini">' + (p.role === "supervisor" ? "Supervisor" : p.role === "admin" ? "Admin" : "Member") + '</td>' +
+        '<td class="num muted">' + num(req) + '</td><td class="num">' + full + " / " + ops.length + '</td>' +
+        '<td class="num">' + money(totalSaved(p.id)) + '</td>' +
+        '<td class="num">' + money(maxLoanFor(p.id)) + (open ? '<div class="mini">loan running</div>' : "") + '</td>' +
+        '<td class="num">' + (owed ? '<span class="dot no">' + num(owed) + '</span>' : '<span class="muted">\u2014</span>') + '</td>' +
+        '<td class="num"><div class="rowacts"><button class="btn small" data-act="ledger" data-id="' + p.id + '">Ledger</button>' +
+        (isAdmin() && canWrite() ? '<button class="btn small" data-act="modal" data-m="member" data-id="' + p.id + '">Edit</button>' : "") +
+        '</div></td></tr>';
+    }).join("") + '</tbody></table></div>'
+    : '<div class="empty"><b>No members yet</b>Add each saver with the month they joined.</div>') + '</section>';
+}
+
+function ledgerView(forced) {
+  const p = personById(forced || S.ledgerFor);
+  if (!p) { S.ledgerFor = null; return membersView(); }
+  const req = monthlyOf(p), ops = openPeriods(p).slice().reverse(), ls = loansOf(p.id);
+  const mine = me() && p.id === me().id;
+  return '<div class="pagehead"><div><h2>' + (mine ? "My savings" : esc(p.name)) + '</h2>' +
+    '<p>Joined ' + fmtPeriod(memberSince(p)) + ' \u00b7 ' + money(req) + ' due each month</p></div>' +
+    (!mine ? '<button class="btn" data-act="ledger" data-id="">Back to members</button>' : "") + '</div>' +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + money(totalSaved(p.id)) + '</b><small>Total savings</small></div>' +
+      '<div class="stat"><b>' + money(maxLoanFor(p.id)) + '</b><small>Borrowing limit</small></div>' +
+      '<div class="stat"><b>' + money(arrears(p.id)) + '</b><small>Behind on savings</small></div>' +
+    '</div>' +
+    '<section class="panel"><header><div><h3>Month by month</h3></div>' +
+    (isAdmin() && canWrite() ? '<button class="btn small" data-act="modal" data-m="savings-quick" data-id="' + p.id + '">Record a payment</button>' : "") + '</header>' +
+    '<div class="scroll"><table><thead><tr><th>Month</th><th class="num">Due</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>' +
+    ops.map(per => {
+      const amt = savingsFor(p.id, per), st = savingStatus(amt, req);
+      return '<tr><td>' + fmtPeriod(per) + '</td><td class="num muted">' + num(req) + '</td><td class="num">' + num(amt) + '</td>' +
+        '<td><span class="dot ' + (st === "paid" ? "ok" : st === "partial" ? "part" : "no") + '">' +
+        (st === "paid" ? "Paid" : st === "partial" ? "Part paid" : "Not paid") + '</span></td></tr>';
+    }).join("") + '</tbody></table></div></section>' +
+    (S.fees.filter(f => f.personId === p.id).length ? '<section class="panel"><header><div><h3>Other contributions</h3></div></header>' +
+      '<div class="scroll"><table><tbody>' + S.fees.filter(f => f.personId === p.id).map(f =>
+      '<tr><td>' + esc(f.label) + '</td><td class="mini">' + fmtDate(f.at) + '</td><td class="num">' + money(f.amount) + '</td></tr>').join("") +
+      '</tbody></table></div></section>' : "") +
+    '<section class="panel"><header><div><h3>Loans</h3></div></header>' +
+    (ls.length ? '<div class="scroll"><table><tbody>' + ls.map(loanRow).join("") + '</tbody></table></div>'
+      : '<div class="empty">No loans taken yet.</div>') + '</section>';
+}
+
+/* ============================================================
+   Savings sheet
+   ============================================================ */
+function savingsView() {
+  const per = S.period || thisPeriod();
+  const people = activePeople();
+  const collected = monthTotal(per), due = monthExpected(per);
+  const editable = isAdmin() && canWrite();
+  return '<div class="pagehead"><div><h2>Savings</h2><p>One sheet per month. Record what each member actually paid in.</p></div>' +
+    '<div class="inline" style="flex:0 1 auto"><button class="btn small" data-act="per" data-d="-1">Previous</button>' +
+    '<select id="periodPick" data-act="perpick" style="min-width:150px">' +
+      periodRange(cfg().cycleStart || thisPeriod(), thisPeriod()).reverse().map(x =>
+        '<option value="' + x + '"' + (x === per ? " selected" : "") + '>' + fmtPeriod(x) + '</option>').join("") +
+    '</select><button class="btn small" data-act="per" data-d="1"' + (per >= thisPeriod() ? " disabled" : "") + '>Next</button></div></div>' +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + money(collected) + '</b><small>Collected in ' + fmtPeriodShort(per) + '</small></div>' +
+      '<div class="stat"><b>' + money(due) + '</b><small>Expected</small></div>' +
+      '<div class="stat"><b>' + money(Math.max(0, due - collected)) + '</b><small>Still outstanding</small></div>' +
+    '</div>' +
+    '<section class="panel"><header><div><h3>' + fmtPeriod(per) + '</h3>' +
+      '<p>' + (editable ? "Type the amount received and save the row." : "Admins record payments here.") + '</p></div>' +
+      '<button class="btn small" data-act="csv" data-p="' + per + '">Export CSV</button></header>' +
+    (people.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Due</th><th class="num">Paid</th><th>Status</th>' +
+      (editable ? "<th></th>" : "") + '</tr></thead><tbody>' + people.map(p => {
+        const req = monthlyOf(p), amt = savingsFor(p.id, per), st = savingStatus(amt, req);
+        const yet = memberSince(p) <= per;
+        return '<tr><td class="name">' + esc(p.name) + (yet ? "" : '<div class="mini">joined later</div>') + '</td>' +
+          '<td class="num muted">' + (yet ? num(req) : "\u2014") + '</td>' +
+          '<td class="num">' + (editable && yet ? '<input type="number" id="sv_' + p.id + '" value="' + amt + '" style="max-width:130px;text-align:right">' : num(amt)) + '</td>' +
+          '<td><span class="dot ' + (st === "paid" ? "ok" : st === "partial" ? "part" : "no") + '">' +
+            (st === "paid" ? "Paid" : st === "partial" ? "Part paid" : "Not paid") + '</span></td>' +
+          (editable ? '<td class="num"><div class="rowacts">' + (yet ?
+            '<button class="btn small" data-act="savefull" data-id="' + p.id + '">Full</button>' +
+            '<button class="btn small primary" data-act="saverow" data-id="' + p.id + '">Save</button>' : "") + '</div></td>' : "") + '</tr>';
+      }).join("") + '</tbody></table></div>' : '<div class="empty">No members yet.</div>') + '</section>';
+}
+
+/* ============================================================
+   Loans
+   ============================================================ */
+function chainView(l) {
+  const a = l.approvals || {};
+  const step = (k, label, cur) => {
+    const got = a[k], isNext = l.status === cur;
+    const signer = got ? (got.title ? esc(got.name) + ' <span class="mini">(' + esc(got.title) + ')</span>' : esc(got.name)) : (isNext ? "Waiting" : "Not yet");
+    return '<div class="step ' + (got ? "done" : isNext ? "next" : "") + '"><div class="who">' + label + '</div>' +
+      '<b>' + signer + '</b>' +
+      (got ? '<div class="mini">Signed ' + fmtDate(got.at) + '</div>' : "") + '</div>';
+  };
+  return '<div class="chain">' + step("first", "First admin", "pending_first") +
+    step("second", "Second admin", "pending_second") + step("supervisor", "Supervisor", "pending_supervisor") + '</div>';
+}
+
+function requestedLoansView() {
+  const rows = [...pendingLoans()].sort((a, b) => (b.requestedAt || "") > (a.requestedAt || "") ? 1 : -1);
+  return '<div class="pagehead"><div><h2>Requested loans</h2><p>Every loan applied for is reviewed here. Each authority signs digitally with their name and title.</p></div></div>' +
+    (rows.length ? '<section class="panel"><div class="scroll"><table><thead><tr><th>Applicant</th><th class="num">Amount</th><th>Status</th><th>Authority signatures</th><th></th></tr></thead><tbody>' +
+      rows.map(l => {
+        const p = personById(l.personId) || { name: "Unknown" };
+        const approvals = ["first", "second", "supervisor"].map(k => {
+          const a = (l.approvals || {})[k];
+          const label = k === "first" ? "First admin" : k === "second" ? "Second admin" : "Supervisor";
+          return '<div class="sigbox" style="margin:2px 0"><div class="mini">' + esc(label) + '</div>' +
+            (a ? '<b>' + esc(a.name) + '</b><div class="mini">' + esc(a.title || "") + '</div><div class="mini">' + fmtDate(a.at) + '</div>' : '<div class="mini">Waiting</div>') + '</div>';
+        }).join("");
+        return '<tr><td><span class="name">' + esc(p.name) + '</span><div class="mini">' + esc(l.number || "Request") + '</div>' +
+          '<div class="mini">Requested ' + fmtDate(l.requestedAt) + '</div></td>' +
+          '<td class="num">' + money(l.principal) + '</td>' +
+          '<td><span class="tag ' + STATE_TAG[l.status] + '">' + STATE_LABEL[l.status] + '</span></td>' +
+          '<td><div class="stack">' + approvals + '</div></td>' +
+          '<td class="num"><div class="rowacts">' + (nextApprovalOpenToMe(l) ? '<button class="btn small primary" data-act="approve" data-id="' + l.id + '">Approve</button>' : '') +
+          '<button class="btn small" data-act="loan" data-id="' + l.id + '">View</button></div></td></tr>';
+      }).join("") + '</tbody></table></div></section>' : '<div class="panel"><div class="empty"><b>No requested loans</b>Any new application will appear here for admin and supervisor review.</div></div>');
+}
+
+function loansView() {
+  const mine = me(), admin = isAdmin();
+  const list = S.loans;
+  const waiting = list.filter(l => (l.status || "").indexOf("pending") === 0);
+  const running = list.filter(l => l.status === "disbursed" || l.status === "approved");
+  const done = list.filter(l => l.status === "closed" || l.status === "rejected");
+  const sec = (t, sub, rows) => rows.length ? '<section class="panel"><header><div><h3>' + t + '</h3>' +
+    (sub ? '<p>' + sub + '</p>' : "") + '</div></header><div class="scroll"><table><tbody>' + rows.map(loanRow).join("") + '</tbody></table></div></section>' : "";
+
+  return '<div class="pagehead"><div><h2>Loans</h2>' +
+    '<p>A loan needs two different admins and the supervisor before any money leaves the box.</p></div>' +
+    (canWrite() && (!cfg().blockConcurrentLoans || admin || !openLoansOf(mine.id).length)
+      ? '<button class="btn primary" data-act="modal" data-m="request">Request a loan</button>' : "") + '</div>' +
+    '<section class="vault" style="padding:18px 20px"><div class="lead"><div>' +
+      '<p class="caption">' + (admin ? "Free to lend right now" : "Your borrowing limit") + '</p>' +
+      '<div class="amount" style="font-size:clamp(26px,5vw,36px)">' + num(admin ? lendable() : maxLoanFor(mine.id)) + '<span>RWF</span></div></div>' +
+      '<div class="side"><div><b>' + num(admin ? principalOut() : totalSaved(mine.id)) + '</b><small>' + (admin ? "Out on loan" : "Your savings") + '</small></div>' +
+      '<div><b>' + cfg().loanMultiplier + '\u00d7</b><small>Savings multiplier</small></div>' +
+      '<div><b>' + (cfg().interestRate * 100) + '%</b><small>Interest, ' + cfg().repaymentDays + ' days</small></div></div></div></section>' +
+    (!admin && loansOf(mine.id).length ? sec("Your loans", "", loansOf(mine.id)) : "") +
+    sec("Waiting for approval", "Two different admins, then the supervisor.", waiting) +
+    sec("Running", "Approved or already paid out.", running) +
+    sec("Finished", "", done) +
+    (!list.length ? '<div class="panel"><div class="empty"><b>No loans yet</b>Every approval and repayment will be recorded here.</div></div>' : "");
+}
+
+function loanDetail(l) {
+  const p = personById(l.personId) || { name: "Unknown" }, c = cfg();
+  const repaid = loanRepaid(l.id), bal = loanBalance(l), over = isOverdue(l);
+  const days = l.dueDate ? daysFromToday(l.dueDate) : null;
+  const rs = S.repayments.filter(r => r.loanId === l.id).sort((x, y) => (x.at < y.at ? 1 : -1));
+  let acts = "";
+  if (canWrite()) {
+    if (nextApprovalOpenToMe(l)) acts += '<button class="btn primary" data-act="approve" data-id="' + l.id + '">Approve</button>';
+    if ((l.status || "").indexOf("pending") === 0 && isAdmin() && me() && l.personId !== me().id)
+      acts += '<button class="btn danger" data-act="modal" data-m="reject" data-id="' + l.id + '">Reject</button>';
+    if (l.status === "approved" && isAdmin()) acts += '<button class="btn primary" data-act="modal" data-m="disburse" data-id="' + l.id + '">Pay the money out</button>';
+    if (l.status === "disbursed" && isAdmin()) acts += '<button class="btn primary" data-act="modal" data-m="repay" data-id="' + l.id + '">Record a repayment</button>';
+  }
+  return '<div class="agreement" id="agreementDoc"><h3>Loan agreement</h3>' +
+    '<div class="mini">' + esc(c.groupName) + ' \u00b7 ' + esc(l.number) + '</div><dl>' +
+    '<dt>Member</dt><dd>' + esc(p.name) + '</dd>' +
+    '<dt>Total savings at request</dt><dd>' + money(l.savingsAtRequest || 0) + '</dd>' +
+    '<dt>Maximum allowed</dt><dd>' + money(l.maxAtRequest || 0) + '</dd>' +
+    '<dt>Loan amount</dt><dd>' + money(l.principal) + '</dd>' +
+    '<dt>Interest at ' + (l.rate * 100) + '%</dt><dd>' + money(l.interest) + '</dd>' +
+    '<dt>Total to repay</dt><dd>' + money(l.total) + '</dd>' +
+    '<dt>Repayment period</dt><dd>' + (l.days || c.repaymentDays) + ' days</dd>' +
+    '<dt>Paid out on</dt><dd>' + fmtDate(l.disbursedAt) + '</dd>' +
+    '<dt>Due</dt><dd>' + fmtDate(l.dueDate) + '</dd></dl>' +
+    '<div class="sigs">' + ["first", "second", "supervisor"].map(k => {
+      const a = (l.approvals || {})[k];
+      const label = k === "first" ? "First admin" : k === "second" ? "Second admin" : "Supervisor";
+      return '<div class="sigbox">' + label + (a ? '<div class="line">' + esc(a.name) + ' — ' + esc(a.title || "") +
+        '<div class="mini">Approved ' + fmtDate(a.at) + '</div></div>' : '<div class="line">&nbsp;<div class="mini">Awaiting signature</div></div>') + '</div>';
+    }).join("") + '</div></div>' +
+    '<div class="noprint"><div class="panel" style="margin-top:18px"><div class="body">' +
+    '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<span class="tag ' + (over ? "red" : STATE_TAG[l.status]) + '">' + (over ? "Overdue" : STATE_LABEL[l.status]) + '</span>' +
+      (l.status === "disbursed" && days !== null ? '<span class="mini">' + (days >= 0 ? days + " days left to repay" : (-days) + " days past due") + '</span>' : "") + '</div>' +
+    chainView(l) +
+    (l.fromBook ? '<p class="hint" style="margin-top:12px">Carried over from the paper contribution book.</p>' : "") +
+    (l.status === "rejected" && l.rejection ? '<div class="err" style="margin-top:12px">Rejected by ' + esc(l.rejection.name) + ': ' + esc(l.rejection.reason) + '</div>' : "") +
+    (l.disbursedAt ? '<div class="calcout" style="margin-top:14px"><div><span>Repaid so far</span><b>' + money(repaid) + '</b></div>' +
+      '<div><span>Interest collected</span><b>' + money(loanInterestPaid(l.id)) + '</b></div>' +
+      '<div class="total"><span>Still owing</span><b>' + money(bal) + '</b></div></div>' : "") +
+    (rs.length ? '<div class="scroll"><table><thead><tr><th>Repayment</th><th class="num">Amount</th><th>Taken by</th></tr></thead><tbody>' +
+      rs.map(r => '<tr><td>' + fmtDate(r.at) + '</td><td class="num">' + money(r.amount) + '</td><td class="mini">' + esc(r.by || "") + '</td></tr>').join("") +
+      '</tbody></table></div>' : "") +
+    (acts ? '<div class="rowacts" style="justify-content:flex-start;margin-top:14px">' + acts + '</div>' : "") +
+    '</div></div></div>';
+}
+
+/* ============================================================
+   Earnings
+   ============================================================ */
+function shareOut(pool, people) {
+  const out = {};
+  if (!people.length || pool <= 0) return out;
+  if (cfg().distribution === "savings") {
+    const base = people.reduce((a, p) => a + totalSaved(p.id), 0);
+    people.forEach(p => { out[p.id] = base ? Math.floor(pool * totalSaved(p.id) / base) : 0; });
+  } else {
+    const each = Math.floor(pool / people.length);
+    people.forEach(p => { out[p.id] = each; });
+  }
+  return out;
+}
+
+function earningsView() {
+  const c = cfg(), pool = earningsPool(), people = activePeople();
+  const shares = shareOut(pool, people);
+  return '<div class="pagehead"><div><h2>Earnings</h2>' +
+    '<p>Interest paid on loans belongs to the group. Share it out whenever the group decides to.</p></div>' +
+    (isAdmin() && canWrite() && pool > 0 ? '<button class="btn primary" data-act="modal" data-m="payout">Share out ' + money(pool) + '</button>' : "") + '</div>' +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + money(interestCollected()) + '</b><small>Interest collected, all time</small></div>' +
+      '<div class="stat"><b>' + money(distributedEarnings()) + '</b><small>Already shared out</small></div>' +
+      '<div class="stat"><b>' + money(pool) + '</b><small>Waiting to be shared</small></div>' +
+      '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? l.interest - loanInterestPaid(l.id) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
+    '</div>' +
+    '<section class="panel"><header><div><h3>Interest on each loan</h3><p>Collected against expected</p></div></header><div class="body">' +
+    (S.loans.length ? hbars(S.loans.map(l => ({
+      label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + esc(l.number) + " \u00b7 " + (l.rate * 100) + "%",
+      right: money(loanInterestPaid(l.id)) + " of " + money(l.interest),
+      parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, l.interest - loanInterestPaid(l.id)), color: "var(--line)" }]
+    }))) : '<p class="mini">No loans recorded yet.</p>') + '</div></section>' +
+    '<section class="panel"><header><div><h3>If you shared it out today</h3>' +
+      '<p>' + (c.distribution === "equal" ? "Split equally between active members" : "Split in proportion to savings") + '</p></div>' +
+      (isAdmin() ? '<button class="btn small" data-act="go" data-k="settings">Change method</button>' : "") + '</header>' +
+    '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Savings</th><th class="num">Share</th></tr></thead><tbody>' +
+    people.map(p => '<tr><td class="name">' + esc(p.name) + '</td><td class="num muted">' + num(totalSaved(p.id)) + '</td>' +
+      '<td class="num">' + money(shares[p.id] || 0) + '</td></tr>').join("") + '</tbody></table></div></section>' +
+    '<section class="panel"><header><div><h3>Past distributions</h3></div></header>' +
+    (S.payouts.length ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Method</th><th class="num">Total</th><th class="num">Members</th></tr></thead><tbody>' +
+      S.payouts.slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(p => '<tr><td>' + fmtDate(p.at) + '</td>' +
+        '<td class="mini">' + (p.method === "equal" ? "Equal shares" : "By savings") + '</td><td class="num">' + money(p.total) + '</td>' +
+        '<td class="num muted">' + (p.shares ? p.shares.length : 0) + '</td></tr>').join("") + '</tbody></table></div>'
+      : '<div class="empty">Nothing shared out yet. Interest keeps building in the box.</div>') + '</section>';
+}
+
+/* ============================================================
+   Profile & settings
+   ============================================================ */
+function profileView() {
+  const p = me(), a = account();
+  const word = { member: "Member", admin: "Admin", supervisor: "Supervisor" };
+  return '<div class="pagehead"><div><h2>Profile</h2><p>Your details and how you sign in.</p></div></div>' +
+    '<div class="chartgrid">' +
+    '<section class="panel"><header><div><h3>' + esc(p.name) + '</h3><p>' + word[p.role] + ' since ' + fmtPeriod(memberSince(p)) + '</p></div></header><div class="body">' +
+      '<dl class="kv"><dt>Email</dt><dd>' + esc(a ? a.email : "\u2014") + '</dd>' +
+      '<dt>Phone</dt><dd>' + esc(p.phone || "\u2014") + '</dd>' +
+      '<dt>Monthly share</dt><dd>' + money(monthlyOf(p)) + '</dd>' +
+      '<dt>Total savings</dt><dd>' + money(totalSaved(p.id)) + '</dd>' +
+      '<dt>Borrowing limit</dt><dd>' + money(maxLoanFor(p.id)) + '</dd>' +
+      '<dt>Loans taken</dt><dd>' + loansOf(p.id).length + '</dd></dl>' +
+      '<button class="btn" data-act="modal" data-m="editme">Edit my details</button> ' +
+      '<button class="btn" data-act="modal" data-m="password">Change password</button>' +
+    '</div></section>' +
+    '<section class="panel"><header><div><h3>Your savings</h3></div></header><div class="body">' +
+      cols(lastMonths(8).map(m => ({ label: fmtPeriodShort(m), value: savingsFor(p.id, m), target: memberSince(p) <= m ? monthlyOf(p) : 0 }))) +
+    '</div></section></div>' +
+    (isAdmin() ? '<section class="panel"><header><div><h3>Sign-in accounts</h3>' +
+      '<p>Everyone who can open this ledger.</p></div></header><div class="scroll"><table><thead><tr>' +
+      '<th>Member</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
+      S.accounts.map(ac => { const pp = personById(ac.personId) || {}; return '<tr><td class="name">' + esc(pp.name || "\u2014") + '</td>' +
+        '<td class="mini">' + esc(ac.email) + '</td><td class="mini">' + (word[pp.role] || "") + '</td>' +
+        '<td class="num">' + (canWrite() ? '<button class="btn small" data-act="modal" data-m="resetpw" data-id="' + ac.id + '">Reset password</button>' : "") + '</td></tr>';
+      }).join("") + '</tbody></table></div></section>' : "");
+}
+
+function settingsView() {
+  const c = cfg(), admin = isAdmin() && canWrite();
+  return '<div class="pagehead"><div><h2>Settings</h2><p>The rules the group agreed on. Changing a rule affects new loans and future months, not what is already recorded.</p></div></div>' +
+    '<section class="panel"><header><div><h3>Group rules</h3></div></header><div class="body">' +
+    '<label class="f"><span>Group name</span><input type="text" id="s_group" value="' + esc(c.groupName) + '"' + (admin ? "" : " disabled") + '></label>' +
+    '<div class="inline"><label class="f"><span>Default monthly saving</span><input type="number" id="s_contrib" value="' + c.monthlyContribution + '"' + (admin ? "" : " disabled") + '></label>' +
+    '<label class="f"><span>Loan multiplier</span><input type="number" step="0.1" id="s_mult" value="' + c.loanMultiplier + '"' + (admin ? "" : " disabled") + '></label></div>' +
+    '<p class="hint">Members who save a different amount, like the 50,000 savers, have their own figure set on their member record.</p>' +
+    '<div class="inline"><label class="f"><span>Interest on new loans (%)</span><input type="number" step="0.5" id="s_rate" value="' + (c.interestRate * 100) + '"' + (admin ? "" : " disabled") + '></label>' +
+    '<label class="f"><span>Days to repay</span><input type="number" id="s_days" value="' + c.repaymentDays + '"' + (admin ? "" : " disabled") + '></label></div>' +
+    '<div class="inline"><label class="f"><span>Sharing earnings</span><select id="s_dist"' + (admin ? "" : " disabled") + '>' +
+      '<option value="equal"' + (c.distribution === "equal" ? " selected" : "") + '>Equal share for every member</option>' +
+      '<option value="savings"' + (c.distribution === "savings" ? " selected" : "") + '>In proportion to savings</option></select></label>' +
+    '<label class="f"><span>A second loan while one is unpaid</span><select id="s_block"' + (admin ? "" : " disabled") + '>' +
+      '<option value="1"' + (c.blockConcurrentLoans ? " selected" : "") + '>Not allowed</option>' +
+      '<option value="0"' + (!c.blockConcurrentLoans ? " selected" : "") + '>Allowed</option></select></label></div>' +
+    (admin ? '<button class="btn primary" data-act="savecfg">Save rules</button>' : '<p class="mini">Only admins can change these.</p>') +
+    '</div></section>' +
+    '<section class="panel"><header><div><h3>Activity</h3><p>Who did what, most recent first.</p></div></header>' +
+    (S.events.length ? '<div class="scroll"><table><tbody>' + S.events.slice().sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 40).map(e =>
+      '<tr><td class="mini" style="white-space:nowrap">' + fmtDate(e.at) + '</td><td>' + esc(e.detail) + '</td><td class="mini">' + esc(e.by) + '</td></tr>').join("") +
+      '</tbody></table></div>' : '<div class="empty">Nothing recorded yet.</div>') + '</section>' +
+    '<section class="panel"><header><div><h3>Appearance</h3></div></header><div class="body">' +
+    '<button class="btn" data-act="theme">Switch light / dark</button></div></section>';
+}
+
+/* ============================================================
+   Modals
+   ============================================================ */
+function modalView() {
+  const m = S.modal;
+  const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
+    reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
+    editme: editMeModal, password: passwordModal, resetpw: resetPwModal }[m.m];
+  if (!f) return "";
+  const v = f(m);
+  return '<div class="veil" data-act="veil"><div class="modal" role="dialog" aria-modal="true">' +
+    '<header><h3>' + v.title + '</h3><button class="x" data-act="close" aria-label="Close">\u00d7</button></header>' +
+    '<div class="body">' + (S.formErr ? '<div class="err">' + esc(S.formErr) + '</div>' : "") + v.body + '</div>' +
+    (v.foot ? '<footer>' + v.foot + '</footer>' : "") + '</div></div>';
+}
+
+function memberModal(m) {
+  const p = m.id ? personById(m.id) : null;
+  return {
+    title: p ? "Edit " + esc(p.name) : "Add a member",
+    body: '<div class="inline"><label class="f"><span>Full name</span><input type="text" id="m_name" value="' + esc(p ? p.name : "") + '"></label>' +
+      '<label class="f"><span>Monthly saving</span><input type="number" id="m_monthly" value="' + (p ? monthlyOf(p) : cfg().monthlyContribution) + '"></label></div>' +
+      '<div class="inline"><label class="f"><span>Email for signing in</span><input type="text" id="m_email" value="' + esc(p && p.email ? p.email : "") + '"></label>' +
+      '<label class="f"><span>Phone</span><input type="text" id="m_phone" value="' + esc(p && p.phone ? p.phone : "") + '" placeholder="Optional"></label></div>' +
+      '<div class="inline"><label class="f"><span>Saving since</span><input type="month" id="m_joined" value="' + (p ? memberSince(p) : cfg().cycleStart) + '"></label>' +
+      '<label class="f"><span>Role</span><select id="m_role">' + ["member", "admin", "supervisor"].map(r =>
+        '<option value="' + r + '"' + (p && p.role === r ? " selected" : "") + '>' + (r === "member" ? "Member" : r === "admin" ? "Admin" : "Supervisor") + '</option>').join("") + '</select></label>' +
+      '<label class="f"><span>Status</span><select id="m_status"><option value="active"' + (!p || p.status !== "inactive" ? " selected" : "") + '>Active</option>' +
+        '<option value="inactive"' + (p && p.status === "inactive" ? " selected" : "") + '>Inactive</option></select></label></div>' +
+      (p ? "" : '<label class="f"><span>First password</span><input type="text" id="m_pw" placeholder="They can change it later"></label>') +
+      '<p class="hint">A loan needs two different admins plus the supervisor, and nobody may approve their own.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button>' +
+      '<button class="btn primary" data-act="savemember" data-id="' + (p ? p.id : "") + '">' + (p ? "Save changes" : "Add member") + '</button>'
+  };
+}
+
+function editMeModal() {
+  const p = me();
+  return {
+    title: "My details",
+    body: '<label class="f"><span>Full name</span><input type="text" id="e_name" value="' + esc(p.name) + '"></label>' +
+      '<label class="f"><span>Phone</span><input type="text" id="e_phone" value="' + esc(p.phone || "") + '"></label>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="saveme">Save</button>'
+  };
+}
+function passwordModal() {
+  return {
+    title: "Change password",
+    body: '<label class="f"><span>Current password</span><input type="password" id="pw_old"></label>' +
+      '<label class="f"><span>New password</span><input type="password" id="pw_new"></label>' +
+      '<label class="f"><span>New password again</span><input type="password" id="pw_new2"></label>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="changepw">Change it</button>'
+  };
+}
+function resetPwModal(m) {
+  const ac = S.accounts.find(a => a.id === m.id), p = ac ? personById(ac.personId) : null;
+  return {
+    title: "Reset password",
+    body: '<p class="mini" style="margin-top:0">Set a new password for ' + esc(p ? p.name : "") + '. Tell them what it is, and ask them to change it.</p>' +
+      '<label class="f"><span>New password</span><input type="text" id="rp_new"></label>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="doreset" data-id="' + m.id + '">Set password</button>'
+  };
+}
+
+function quickSaveModal(m) {
+  const people = activePeople();
+  const pick = m.id || (people[0] && people[0].id);
+  return {
+    title: "Record a savings payment",
+    body: '<label class="f"><span>Member</span><select id="q_person" data-act="qsync">' +
+      people.map(p => '<option value="' + p.id + '"' + (pick === p.id ? " selected" : "") + '>' + esc(p.name) + ' \u00b7 ' + num(monthlyOf(p)) + '</option>').join("") + '</select></label>' +
+      '<div class="inline"><label class="f"><span>Month</span><input type="month" id="q_period" value="' + (S.period || thisPeriod()) + '"></label>' +
+      '<label class="f"><span>Amount received</span><input type="number" id="q_amount" value="' + monthlyOf(personById(pick)) + '"></label></div>' +
+      '<p class="hint">This replaces whatever is recorded for that member in that month.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="quicksave">Record payment</button>'
+  };
+}
+
+function requestModal() {
+  const mine = me();
+  const people = isAdmin() ? activePeople() : [mine];
+  const target = mine.id;
+  return {
+    title: "Request a loan",
+    body: (isAdmin() ? '<label class="f"><span>Member</span><select id="r_person" data-act="rquote">' +
+      people.map(p => '<option value="' + p.id + '"' + (p.id === target ? " selected" : "") + '>' + esc(p.name) + '</option>').join("") + '</select></label>'
+      : '<input type="hidden" id="r_person" value="' + target + '">') +
+      '<div class="calcout" id="r_limits"></div>' +
+      '<label class="f"><span>Amount you want</span><input type="number" id="r_amount" data-act="rquote" placeholder="0"></label>' +
+      '<div class="calcout" id="r_quote"></div>' +
+      '<p class="hint">Interest is ' + (cfg().interestRate * 100) + '% of the loan, and the whole amount is due ' + cfg().repaymentDays + ' days after the money reaches you.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="submitloan">Send for approval</button>'
+  };
+}
+
+function refreshQuote() {
+  const pe = $("#r_person"), ae = $("#r_amount"), lim = $("#r_limits"), q = $("#r_quote");
+  if (!pe || !lim) return;
+  const pid = pe.value, amt = Number(ae && ae.value) || 0;
+  lim.innerHTML = '<div><span>Total savings</span><b>' + money(totalSaved(pid)) + '</b></div>' +
+    '<div><span>Maximum loan (\u00d7' + cfg().loanMultiplier + ')</span><b>' + money(maxLoanFor(pid)) + '</b></div>' +
+    '<div><span>Free in the box</span><b>' + money(lendable()) + '</b></div>';
+  if (!q) return;
+  if (!amt) { q.innerHTML = '<div class="muted">Enter an amount to see the interest and what you would repay.</div>'; return; }
+  const k = quoteLoan(amt), errs = validateLoanRequest(pid, amt);
+  q.innerHTML = '<div><span>Loan</span><b>' + money(k.principal) + '</b></div>' +
+    '<div><span>Interest at ' + (cfg().interestRate * 100) + '%</span><b>' + money(k.interest) + '</b></div>' +
+    '<div class="total"><span>Repay within ' + k.days + ' days</span><b>' + money(k.total) + '</b></div>' +
+    (errs.length ? '<div style="color:var(--red);padding-top:8px">' + esc(errs[0]) + '</div>' : "");
+}
+
+function loanModal(m) {
+  const l = S.loans.find(x => x.id === m.id);
+  if (!l) return { title: "Loan", body: '<p class="mini">This loan is no longer here.</p>' };
+  return { title: esc(l.number), body: loanDetail(l),
+    foot: '<button class="btn" data-act="download" data-id="' + l.id + '">Download agreement</button><button class="btn" data-act="close">Close</button>' };
+}
+function rejectModal(m) {
+  return { title: "Reject this loan",
+    body: '<label class="f"><span>Reason the member will see</span><textarea id="rj_reason" rows="3"></textarea></label>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn danger" data-act="doreject" data-id="' + m.id + '">Reject loan</button>' };
+}
+function disburseModal(m) {
+  const l = S.loans.find(x => x.id === m.id);
+  if (!l) return { title: "Pay out", body: "" };
+  return { title: "Pay the money out",
+    body: '<p class="mini" style="margin-top:0">' + money(l.principal) + ' to ' + esc((personById(l.personId) || {}).name || "") +
+      '. The ' + (l.days || cfg().repaymentDays) + '-day clock starts on this date.</p>' +
+      '<label class="f"><span>Date the money was handed over</span><input type="date" id="d_date" value="' + todayISO() + '"></label>' +
+      '<div class="calcout"><div><span>Due date</span><b id="d_due">' + fmtDate(addDays(todayISO(), l.days || cfg().repaymentDays)) + '</b></div>' +
+      '<div class="total"><span>Amount to come back</span><b>' + money(l.total) + '</b></div></div>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dodisburse" data-id="' + l.id + '">Confirm payout</button>' };
+}
+function repayModal(m) {
+  const l = S.loans.find(x => x.id === m.id);
+  if (!l) return { title: "Repayment", body: "" };
+  const bal = loanBalance(l);
+  return { title: "Record a repayment",
+    body: '<div class="calcout"><div><span>Still owing</span><b>' + money(bal) + '</b></div></div>' +
+      '<div class="inline"><label class="f"><span>Amount received</span><input type="number" id="p_amount" value="' + Math.round(bal) + '"></label>' +
+      '<label class="f"><span>Date</span><input type="date" id="p_date" value="' + todayISO() + '"></label></div>' +
+      '<p class="hint">Part payments are fine. The loan closes itself once the full amount is back.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dorepay" data-id="' + l.id + '">Record repayment</button>' };
+}
+function payoutModal() {
+  const pool = earningsPool(), people = activePeople(), shares = shareOut(pool, people);
+  const given = Object.keys(shares).reduce((a, k) => a + shares[k], 0);
+  return { title: "Share out earnings",
+    body: '<div class="calcout"><div><span>Interest waiting</span><b>' + money(pool) + '</b></div>' +
+      '<div><span>Members</span><b>' + people.length + '</b></div>' +
+      '<div class="total"><span>Going out</span><b>' + money(given) + '</b></div></div>' +
+      '<div class="scroll"><table><tbody>' + people.map(p => '<tr><td class="name">' + esc(p.name) + '</td>' +
+        '<td class="num">' + money(shares[p.id] || 0) + '</td></tr>').join("") + '</tbody></table></div>' +
+      '<p class="hint">Recording this takes the money out of the box. Hand it over the same day so the ledger matches the cash.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dopayout">Share it out</button>' };
+}
+
+/* ============================================================
+   Actions
+   ============================================================ */
+const val = id => { const e = $("#" + id); return e ? e.value.trim() : ""; };
+const valn = id => Number(val(id)) || 0;
+
+async function onAct(act, el) {
+  const id = el.getAttribute("data-id");
+  S.formErr = null;
+
+  if (act === "go") { S.route = el.getAttribute("data-k"); S.ledgerFor = null; window.scrollTo(0, 0); render(); return; }
+  if (act === "close" || act === "veil") { S.modal = null; render(); return; }
+  if (act === "theme") {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+    try { localStorage.setItem("ikimina-theme", dark ? "light" : "dark"); } catch (e) {}
+    return;
+  }
+  if (act === "modal") { S.modal = { m: el.getAttribute("data-m"), id }; render(); return; }
+  if (act === "loan") { S.modal = { m: "loan", id }; render(); return; }
+  if (act === "ledger") { S.ledgerFor = id || null; S.route = "members"; window.scrollTo(0, 0); render(); return; }
+  if (act === "per") { S.period = shiftPeriod(S.period || thisPeriod(), Number(el.getAttribute("data-d"))); render(); return; }
+  if (act === "rquote") { refreshQuote(); return; }
+  if (act === "qsync") { const p = personById(val("q_person")); const a = $("#q_amount"); if (p && a) a.value = monthlyOf(p); return; }
+  if (act === "seed") { await seedBook(); return; }
+
+  /* ---- auth ---- */
+  if (act === "login") {
+    const email = val("li_email").toLowerCase(), pw = $("#li_pw") ? $("#li_pw").value : "";
+    const ac = S.accounts.find(a => (a.email || "").toLowerCase() === email);
+    if (!ac || ac.passHash !== await hashPw(pw)) { S.formErr = "That email and password do not match an account."; render(); return; }
+    S.session = ac.id;
+    try { localStorage.setItem("ikimina-session", ac.id); } catch (e) {}
+    S.route = "dashboard"; render(); return;
+  }
+  if (act === "logout") {
+    S.session = null;
+    try { localStorage.removeItem("ikimina-session"); } catch (e) {}
+    render(); return;
+  }
+  if (act === "changepw") {
+    const ac = account();
+    if (ac.passHash !== await hashPw($("#pw_old").value)) { S.formErr = "Your current password is not right."; render(); return; }
+    const a = $("#pw_new").value, b = $("#pw_new2").value;
+    if (a.length < 4) { S.formErr = "Use at least four characters."; render(); return; }
+    if (a !== b) { S.formErr = "The two new passwords are different."; render(); return; }
+    await put("accounts/" + ac.id, Object.assign({}, ac, { passHash: await hashPw(a) }));
+    S.modal = null; toast("Password changed"); return;
+  }
+  if (act === "doreset") {
+    const ac = S.accounts.find(x => x.id === id);
+    const npw = val("rp_new");
+    if (!ac || npw.length < 4) { S.formErr = "Use at least four characters."; render(); return; }
+    await put("accounts/" + ac.id, Object.assign({}, ac, { passHash: await hashPw(npw) }));
+    await logEvent("account", "Password reset for " + ((personById(ac.personId) || {}).name || ""));
+    S.modal = null; toast("Password set"); return;
+  }
+  if (act === "saveme") {
+    const p = me();
+    await put("people/" + p.id, Object.assign({}, p, { name: val("e_name") || p.name, phone: val("e_phone") }));
+    S.modal = null; toast("Saved"); return;
+  }
+
+  /* ---- members ---- */
+  if (act === "savemember") {
+    const name = val("m_name");
+    if (!name) { S.formErr = "A name is needed."; render(); return; }
+    const old = id ? personById(id) : null, pid = id || uid();
+    const email = val("m_email").toLowerCase();
+    await put("people/" + pid, Object.assign({}, old || {}, {
+      id: pid, name, email, phone: val("m_phone"), role: val("m_role"), status: val("m_status"),
+      monthly: valn("m_monthly") || cfg().monthlyContribution,
+      joined: val("m_joined") || thisPeriod(), createdAt: old ? old.createdAt : nowISO()
+    }));
+    if (email) {
+      const existing = S.accounts.find(a => a.personId === pid);
+      if (existing) await put("accounts/" + existing.id, Object.assign({}, existing, { email }));
+      else {
+        const pw = val("m_pw") || name.split(" ")[0];
+        const aid = "acc_" + pid;
+        await put("accounts/" + aid, { id: aid, personId: pid, email, passHash: await hashPw(pw), createdAt: nowISO() });
+      }
+    }
+    await logEvent("member", (old ? "Updated " : "Added ") + name);
+    S.modal = null; toast(old ? "Member updated" : "Member added"); return;
+  }
+
+  /* ---- savings ---- */
+  if (act === "saverow" || act === "savefull") {
+    const per = S.period || thisPeriod();
+    const amount = act === "savefull" ? monthlyOf(personById(id)) : Number(($("#sv_" + id) || {}).value) || 0;
+    await recordSaving(id, per, amount); return;
+  }
+  if (act === "quicksave") {
+    const pid = val("q_person");
+    if (!pid) { S.formErr = "Pick a member."; render(); return; }
+    await recordSaving(pid, val("q_period"), valn("q_amount"));
+    S.modal = null; return;
+  }
+  if (act === "csv") { exportCSV(el.getAttribute("data-p")); return; }
+
+  /* ---- loans ---- */
+  if (act === "submitloan") {
+    const pid = val("r_person"), amt = valn("r_amount");
+    const errs = validateLoanRequest(pid, amt);
+    if (errs.length) { S.formErr = errs[0]; render(); refreshQuote(); return; }
+    const k = quoteLoan(amt), lid = uid();
+    await put("loans/" + lid, { id: lid, number: nextLoanNumber(), personId: pid, principal: k.principal,
+      rate: cfg().interestRate, interest: k.interest, total: k.total, days: cfg().repaymentDays,
+      status: "pending_first", savingsAtRequest: totalSaved(pid), maxAtRequest: maxLoanFor(pid),
+      approvals: {}, requestedAt: nowISO(), disbursedAt: null, dueDate: null });
+    await logEvent("loan", "Loan requested: " + money(k.principal) + " for " + ((personById(pid) || {}).name || ""));
+    S.modal = null; toast("Sent for approval"); return;
+  }
+  if (act === "approve") {
+    const l = S.loans.find(x => x.id === id);
+    if (!l || !nextApprovalOpenToMe(l)) return;
+    const stamp = { byId: me().id, name: me().name, title: roleLabel(myRole()), at: nowISO() };
+    const a = Object.assign({}, l.approvals || {});
+    let next = l.status;
+    if (l.status === "pending_first") { a.first = stamp; next = "pending_second"; }
+    else if (l.status === "pending_second") { a.second = stamp; next = "pending_supervisor"; }
+    else if (l.status === "pending_supervisor") { a.supervisor = stamp; next = "approved"; }
+    await put("loans/" + l.id, Object.assign({}, l, { approvals: a, status: next }));
+    await logEvent("loan", "Approved " + l.number);
+    toast(next === "approved" ? "Approved in full" : "Approved, passed on"); return;
+  }
+  if (act === "doreject") {
+    const l = S.loans.find(x => x.id === id);
+    if (!l) return;
+    await put("loans/" + l.id, Object.assign({}, l, { status: "rejected",
+      rejection: { byId: me().id, name: me().name, at: nowISO(), reason: val("rj_reason") || "No reason given" } }));
+    await logEvent("loan", "Rejected " + l.number);
+    S.modal = null; toast("Loan rejected"); return;
+  }
+  if (act === "dodisburse") {
+    const l = S.loans.find(x => x.id === id);
+    if (!l) return;
+    const when = val("d_date") || todayISO();
+    await put("loans/" + l.id, Object.assign({}, l, { status: "disbursed", disbursedAt: when,
+      dueDate: addDays(when, l.days || cfg().repaymentDays), disbursedBy: me().name }));
+    await logEvent("loan", "Paid out " + money(l.principal) + " on " + l.number);
+    S.modal = null; toast("Money recorded as paid out"); return;
+  }
+  if (act === "dorepay") {
+    const l = S.loans.find(x => x.id === id);
+    if (!l) return;
+    const amt = valn("p_amount");
+    if (amt <= 0) { S.formErr = "Enter the amount received."; render(); return; }
+    const rid = uid();
+    await put("repayments/" + rid, { id: rid, loanId: l.id, amount: Math.round(amt), at: val("p_date") || todayISO(), by: me().name });
+    if (loanRepaid(l.id) + amt >= l.total - 1) await put("loans/" + l.id, Object.assign({}, l, { status: "closed", closedAt: val("p_date") || todayISO() }));
+    await logEvent("loan", "Repayment of " + money(amt) + " on " + l.number);
+    S.modal = null; toast("Repayment recorded"); return;
+  }
+
+  /* ---- earnings ---- */
+  if (act === "dopayout") {
+    const pool = earningsPool(), people = activePeople(), shares = shareOut(pool, people);
+    const list = people.map(p => ({ personId: p.id, amount: shares[p.id] || 0 })).filter(x => x.amount > 0);
+    const total = list.reduce((a, x) => a + x.amount, 0);
+    if (total <= 0) { S.formErr = "There is nothing to share yet."; render(); return; }
+    const pid = uid();
+    await put("payouts/" + pid, { id: pid, at: todayISO(), method: cfg().distribution, total, shares: list, by: me().name });
+    await logEvent("earnings", "Shared out " + money(total));
+    S.modal = null; toast("Earnings shared out"); return;
+  }
+
+  /* ---- settings ---- */
+  if (act === "savecfg") {
+    await put("config/settings", Object.assign({}, cfg(), {
+      groupName: val("s_group") || DEFAULTS.groupName, monthlyContribution: valn("s_contrib") || 25000,
+      loanMultiplier: Number(val("s_mult")) || 1.8, interestRate: (Number(val("s_rate")) || 0) / 100,
+      repaymentDays: valn("s_days") || 45, distribution: val("s_dist"), blockConcurrentLoans: val("s_block") === "1"
+    }));
+    await logEvent("settings", "Group rules updated");
+    toast("Rules saved"); return;
+  }
+  if (act === "download") { downloadAgreement(id); return; }
+}
+
+async function recordSaving(personId, period, amount) {
+  const docId = personId + "__" + period;
+  if (amount <= 0) await drop("savings/" + docId);
+  else await put("savings/" + docId, { id: docId, personId, period, amount: Math.round(amount), recordedAt: nowISO(), recordedBy: me().name });
+  const p = personById(personId);
+  await logEvent("savings", (p ? p.name : "") + " \u00b7 " + fmtPeriod(period) + " \u00b7 " + money(amount));
+  toast("Saved");
+}
+
+async function exportCSV(period) {
+  const rows = [["Member", "Month", "Required", "Paid", "Status"]].concat(activePeople().map(p => {
+    const req = monthlyOf(p), amt = savingsFor(p.id, period);
+    return [p.name, period, req, amt, savingStatus(amt, req)];
+  }));
+  const csv = rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(",")).join("\n");
+  saveFile("savings-" + period + ".csv", csv, "text/csv");
+}
+
+function saveFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+async function downloadAgreement(loanId) {
+  const l = S.loans.find(x => x.id === loanId);
+  if (!l) return;
+  const doc = $("#agreementDoc");
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + esc(l.number) +
+    "</title><style>body{font-family:Georgia,serif;max-width:640px;margin:40px auto;padding:0 20px;color:#14221D}" +
+    "dl{display:grid;grid-template-columns:auto 1fr;gap:6px 18px}dd{margin:0;text-align:right;font-weight:600}" +
+    ".sigs{display:flex;gap:20px;margin-top:30px;border-top:1px solid #ccc;padding-top:18px}" +
+    ".sigbox{flex:1;font-size:13px;color:#666}.line{margin-top:26px;border-top:1px solid #999;padding-top:5px;color:#000}" +
+    ".mini{font-size:12px;color:#777}</style></head><body>" + (doc ? doc.innerHTML : "") + "</body></html>";
+  saveFile(l.number + "-agreement.html", html, "text/html");
+}
+
+/* ---------- wiring ---------- */
+function wire() {
+  document.querySelectorAll("[data-act]").forEach(el => {
+    if (el._w) return;
+    el._w = 1;
+    const act = el.getAttribute("data-act");
+    if (act === "rquote" || act === "perpick" || act === "qsync") {
+      el.addEventListener(act === "qsync" ? "change" : "input", () => {
+        if (act === "perpick") { S.period = el.value; render(); }
+        else if (act === "qsync") onAct("qsync", el);
+        else refreshQuote();
+      });
+      return;
+    }
+    if (act === "loginkey") {
+      el.addEventListener("keydown", ev => { if (ev.key === "Enter") onAct("login", el); });
+      return;
+    }
+    el.addEventListener("click", ev => {
+      if (act === "veil" && ev.target !== el) return;
+      ev.stopPropagation();
+      Promise.resolve(onAct(act, el)).catch(() => {});
+    });
+  });
+  const dd = $("#d_date");
+  if (dd && !dd._w2) {
+    dd._w2 = 1;
+    dd.addEventListener("input", () => {
+      const l = S.loans.find(x => x.id === S.modal.id), due = $("#d_due");
+      if (l && due && dd.value) due.textContent = fmtDate(addDays(dd.value, l.days || cfg().repaymentDays));
+    });
+  }
+  if (S.modal && S.modal.m === "request") refreshQuote();
+}
+
+try { const t = localStorage.getItem("ikimina-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+boot();
+
+
+</script>
+</body>
+</html>
