@@ -42,7 +42,8 @@ earlier instructions). Click **Sign in**, and you should land on a
 "Load the contribution book" screen. Click it once to seed your eight
 members, their savings, and their existing loans. The sample book includes
 October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
-and Patrick (paid on the 16th), plus Chadia's RWF 250 September rate payment.
+and Patrick (paid on the 16th), Patrick's RWF 250 October rate payment, plus
+Chadia's separate RWF 250 September rate payment.
 From then on the data lives in Supabase, not in the page.
 
 The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
@@ -51,6 +52,8 @@ contribution cover that penalty first, then accrued loan interest at the loan's
 monthly rate (3% by default) on outstanding principal. Any remaining amount is
 carried forward as an interest credit; it does not count toward savings or
 reduce loan principal.
+Admins can edit each recorded rate payment's amount and date or add a payment
+from the member's row on the Rate contributions page.
 
 ## 4. Put it online for free
 
