@@ -40,8 +40,10 @@ from step 1.5, save the file.
 Open `index.html` in a browser (or use VS Code's Live Server — see the
 earlier instructions). Click **Sign in**, and you should land on a
 "Load the contribution book" screen. Click it once to seed your eight
-members, their savings, and their existing loans. From then on the
-data lives in Supabase, not in the page.
+members, their savings, and their existing loans. The sample book includes
+October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
+and Patrick (paid on the 16th), plus Chadia's RWF 250 September rate payment.
+From then on the data lives in Supabase, not in the page.
 
 The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
 monthly contributions starting on the 16th. Amounts paid above the normal
