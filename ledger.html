@@ -403,7 +403,12 @@ function loansOf(pid) { return S.loans.filter(l => l.personId === pid); }
 function openLoansOf(pid) { return loansOf(pid).filter(l => OPEN_STATES.includes(l.status)); }
 const pendingLoans = () => S.loans.filter(l => (l.status || "").indexOf("pending") === 0);
 
-function splitPart(r, field) { const l = S.loans.find(x => x.id === r.loanId); if (!l || !l.total) return 0; return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total); }
+function splitPart(r, field) {
+  if (r[field] != null) return Math.max(0, Number(r[field]) || 0);
+  const l = S.loans.find(x => x.id === r.loanId);
+  if (!l || !l.total) return 0;
+  return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total);
+}
 function addMonths(iso, months) {
   const source = new Date(iso + "T00:00:00Z");
   const day = source.getUTCDate();
@@ -519,8 +524,8 @@ async function hashPw(pw) {
    Seed — the contribution book
    ============================================================ */
 const BOOK = [
-  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000 },
-  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000 },
+  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
+  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
   { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
   { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
   { id: "chadia", name: "Chadia", monthly: 25000, role: "admin", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
@@ -559,6 +564,13 @@ async function seedBook() {
         requestedAt: "2026-09-01T00:00:00.000Z", disbursedAt: "2026-09-01", dueDate: addDays("2026-09-01", 45),
         fromBook: true
       });
+      if (b.interestPaid) {
+        const rid = "repay_book_" + b.id + "_first_interest";
+        await put("repayments/" + rid, {
+          id: rid, loanId: lid, amount: b.interestPaid, principal: 0,
+          interest: b.interestPaid, at: "2026-10-01", by: "Contribution book"
+        });
+      }
     }
   }
   await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Sep 2026");
@@ -734,7 +746,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to September 2026, the three loans running, and Chadia\u2019s 250 rate contribution. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month interest paid by Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
