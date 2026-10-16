@@ -261,7 +261,7 @@ window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
    ============================================================ */
 const DEFAULTS = {
   groupName: "Ikimina Savings & Loan",
-  monthlyContribution: 25000, loanMultiplier: 1.8, interestRate: 0.05,
+  monthlyContribution: 25000, loanMultiplier: 1.8, interestRate: 0.03,
   repaymentDays: 45, blockConcurrentLoans: true, distribution: "equal", cycleStart: "2026-06"
 };
 
@@ -306,12 +306,68 @@ const monthlyOf = p => Number(p && p.monthly) || cfg().monthlyContribution;
 /* ---------- savings ---------- */
 function memberSince(p) { return p.joined || cfg().cycleStart || thisPeriod(); }
 function openPeriods(p) { const s = memberSince(p), n = thisPeriod(); return s > n ? [] : periodRange(s, n); }
-function savingsFor(pid, per) { const r = S.savings.find(s => s.personId === pid && s.period === per); return r ? Number(r.amount) || 0 : 0; }
-function totalSaved(pid) { return S.savings.filter(s => s.personId === pid).reduce((a, s) => a + (Number(s.amount) || 0), 0); }
+function rawSavingsFor(pid, per) { const r = S.savings.find(s => s.personId === pid && s.period === per); return r ? Number(r.amount) || 0 : 0; }
+function savingsFor(pid, per) { return Math.min(Math.max(0, rawSavingsFor(pid, per)), monthlyOf(personById(pid))); }
+function totalSaved(pid) {
+  const req = monthlyOf(personById(pid));
+  return S.savings.filter(s => s.personId === pid).reduce((sum, s) => sum + Math.min(req, Math.max(0, Number(s.amount) || 0)), 0);
+}
 function savingStatus(paid, req) { if (paid >= req) return "paid"; if (paid > 0) return "partial"; return "unpaid"; }
 function statusOf(p, per) { return savingStatus(savingsFor(p.id, per), monthlyOf(p)); }
 function arrears(pid) { const p = personById(pid); if (!p) return 0; const req = monthlyOf(p); return openPeriods(p).reduce((a, per) => a + Math.max(0, req - savingsFor(pid, per)), 0); }
-const groupContributions = () => S.savings.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+function daysBetween(from, to, inclusive) {
+  const start = new Date(from + "T00:00:00Z"), end = new Date(to + "T00:00:00Z");
+  return end < start ? 0 : Math.floor((end - start) / 86400000) + (inclusive ? 1 : 0);
+}
+function rateDetails(p, asOf) {
+  const today = asOf || todayISO(), req = monthlyOf(p);
+  let accrued = 0, unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
+  for (const per of openPeriods(p)) {
+    const rec = S.savings.find(s => s.personId === p.id && s.period === per);
+    const amount = rec ? Math.max(0, Number(rec.amount) || 0) : 0;
+    const unpaid = Math.max(0, req - amount);
+    unpaidContribution += unpaid;
+    const recordedDate = rec && rec.recordedAt ? rec.recordedAt.slice(0, 10) : null;
+    if (!recordedDate || recordedDate <= today) overpaymentCredits += Math.max(0, amount - req);
+
+    const chargeStart = per + "-16";
+    if (chargeStart > today) continue;
+    const paidAt = rec && rec.recordedBy === "Contribution book" && amount >= req
+      ? per + "-15"
+      : rec && rec.recordedAt ? rec.recordedAt.slice(0, 10) : null;
+    const paymentDate = paidAt && paidAt <= today ? paidAt : null;
+    const daysBeforePayment = paymentDate ? daysBetween(chargeStart, paymentDate, true) : 0;
+    const remainingStart = paymentDate && paymentDate >= chargeStart
+      ? addDays(paymentDate, 1) : chargeStart;
+    const daysUnpaid = unpaid > 0 ? daysBetween(remainingStart, today, true) : 0;
+    accrued += (req * daysBeforePayment + unpaid * daysUnpaid) * 0.01;
+    lateDays += daysBeforePayment + daysUnpaid;
+  }
+  const feeCredits = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || "") && (!f.at || f.at.slice(0, 10) <= today))
+    .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  const roundedAccrued = Math.round(accrued);
+  const roundedFees = Math.round(feeCredits);
+  const roundedOverpayments = Math.round(overpaymentCredits);
+  const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - roundedFees));
+  const roundedPaid = Math.min(roundedAccrued, roundedFees + roundedOverpayments);
+  return {
+    accrued: roundedAccrued,
+    paid: roundedPaid,
+    outstanding: Math.max(0, roundedAccrued - roundedPaid),
+    loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
+    unpaidContribution: Math.round(unpaidContribution),
+    dailyRate: Math.round(unpaidContribution * 0.01),
+    lateDays
+  };
+}
+const rateSavingsTotal = () => S.savings.reduce((sum, s) => {
+  const req = monthlyOf(personById(s.personId));
+  return sum + Math.max(0, (Number(s.amount) || 0) - req);
+}, 0);
+const groupContributions = () => S.savings.reduce((sum, s) => {
+  const req = monthlyOf(personById(s.personId));
+  return sum + Math.min(req, Math.max(0, Number(s.amount) || 0));
+}, 0);
 const feesTotal = () => S.fees.reduce((a, f) => a + (Number(f.amount) || 0), 0);
 const monthTotal = per => activePeople().reduce((a, p) => a + savingsFor(p.id, per), 0);
 const monthExpected = per => activePeople().filter(p => memberSince(p) <= per).reduce((a, p) => a + monthlyOf(p), 0);
@@ -326,22 +382,85 @@ const STATE_LABEL = {
 const STATE_TAG = { pending_first: "blue", pending_second: "blue", pending_supervisor: "blue", approved: "brass", disbursed: "brass", closed: "green", rejected: "red" };
 
 function loanRepaid(id) { return S.repayments.filter(r => r.loanId === id).reduce((a, r) => a + (Number(r.amount) || 0), 0); }
-function loanBalance(l) { return Math.max(0, (Number(l.total) || 0) - loanRepaid(l.id)); }
+function loanPrincipalPaidFromRepayments(id, asOf) {
+  const l = S.loans.find(x => x.id === id);
+  if (!l) return 0;
+  return Math.min(Number(l.principal) || 0, S.repayments.filter(r => r.loanId === id && (!asOf || (r.at || "").slice(0, 10) <= asOf))
+    .reduce((sum, r) => sum + splitPart(r, "principal"), 0));
+}
+function loanInterestPaidFromRepayments(id, asOf) {
+  const l = S.loans.find(x => x.id === id);
+  if (!l) return 0;
+  const repayments = S.repayments.filter(r => r.loanId === id && (!asOf || !r.at || r.at.slice(0, 10) <= asOf));
+  const repaid = repayments.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  return Math.min(loanInterestDue(l, asOf), Math.max(0, repaid - loanPrincipalPaidFromRepayments(id, asOf)));
+}
+function loanBalance(l) {
+  return Math.max(0, (Number(l.principal) || 0) + loanInterestDue(l) - loanRepaid(l.id) - loanInterestCreditForLoan(l.id));
+}
 function isOverdue(l) { return l.status === "disbursed" && l.dueDate && daysFromToday(l.dueDate) < 0; }
 function loansOf(pid) { return S.loans.filter(l => l.personId === pid); }
 function openLoansOf(pid) { return loansOf(pid).filter(l => OPEN_STATES.includes(l.status)); }
 const pendingLoans = () => S.loans.filter(l => (l.status || "").indexOf("pending") === 0);
 
 function splitPart(r, field) { const l = S.loans.find(x => x.id === r.loanId); if (!l || !l.total) return 0; return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total); }
-const interestCollected = () => S.repayments.reduce((a, r) => a + splitPart(r, "interest"), 0);
-const principalRepaid = () => S.repayments.reduce((a, r) => a + splitPart(r, "principal"), 0);
-function loanInterestPaid(id) { return S.repayments.filter(r => r.loanId === id).reduce((a, r) => a + splitPart(r, "interest"), 0); }
+function addMonths(iso, months) {
+  const source = new Date(iso + "T00:00:00Z");
+  const day = source.getUTCDate();
+  const target = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + months, 1));
+  target.setUTCDate(Math.min(day, new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()));
+  return target.toISOString().slice(0, 10);
+}
+function principalRepaidAt(l, date) {
+  return Math.min(Number(l.principal) || 0, S.repayments.filter(r => r.loanId === l.id && r.at && r.at.slice(0, 10) <= date)
+    .reduce((sum, r) => sum + splitPart(r, "principal"), 0));
+}
+function loanInterestDue(l, asOf) {
+  const storedRate = Number(l.rate);
+  const rate = Number.isFinite(storedRate) ? storedRate : 0.03;
+  const initial = Number(l.interest) || 0;
+  if (!l.disbursedAt) return initial;
+  const through = l.status === "closed" && l.closedAt ? l.closedAt : asOf || todayISO();
+  let extra = 0;
+  for (let month = 2, due = addMonths(l.disbursedAt, month); due <= through; month++, due = addMonths(l.disbursedAt, month)) {
+    const principal = Math.max(0, (Number(l.principal) || 0) - principalRepaidAt(l, due));
+    extra += principal * rate;
+  }
+  return initial + Math.round(extra);
+}
+function loanInterestCreditAllocations(pid, asOf) {
+  const p = personById(pid);
+  if (!p) return { byLoan: {}, advance: 0 };
+  let credit = rateDetails(p, asOf).loanInterestCredit;
+  const byLoan = {};
+  const loans = loansOf(pid).filter(l => l.disbursedAt).slice().sort((a, b) =>
+    (a.disbursedAt || "").localeCompare(b.disbursedAt || ""));
+  for (const l of loans) {
+    const outstanding = Math.max(0, loanInterestDue(l, asOf) - loanInterestPaidFromRepayments(l.id, asOf));
+    const applied = Math.min(credit, outstanding);
+    byLoan[l.id] = applied;
+    credit -= applied;
+  }
+  return { byLoan, advance: credit };
+}
+function loanInterestCreditForLoan(id) {
+  const l = S.loans.find(x => x.id === id);
+  return l ? (loanInterestCreditAllocations(l.personId).byLoan[id] || 0) : 0;
+}
+const contributionInterestCollected = () => S.people.reduce((sum, p) => {
+  const allocations = loanInterestCreditAllocations(p.id).byLoan;
+  return sum + Object.keys(allocations).reduce((total, id) => total + allocations[id], 0);
+}, 0);
+const interestCollected = () => S.repayments.reduce((a, r) => a + splitPart(r, "interest"), 0) + contributionInterestCollected();
+const principalRepaid = () => S.loans.reduce((sum, l) => sum + loanPrincipalPaidFromRepayments(l.id), 0);
+function loanInterestPaid(id) { return loanInterestPaidFromRepayments(id) + loanInterestCreditForLoan(id); }
 const distributedEarnings = () => S.payouts.reduce((a, p) => a + (Number(p.total) || 0), 0);
 const disbursedPrincipal = () => S.loans.filter(l => l.disbursedAt).reduce((a, l) => a + (Number(l.principal) || 0), 0);
 const principalOut = () => Math.max(0, disbursedPrincipal() - principalRepaid());
 const committedPrincipal = () => S.loans.filter(l => l.status === "approved").reduce((a, l) => a + (Number(l.principal) || 0), 0);
 const earningsPool = () => interestCollected() - distributedEarnings();
-const boxTotal = () => groupContributions() + feesTotal() + interestCollected() - distributedEarnings();
+const rateSavingsUnallocated = () => Math.max(0, rateSavingsTotal() - contributionInterestCollected());
+const boxTotal = () => groupContributions() + feesTotal() + rateSavingsUnallocated() + interestCollected() - distributedEarnings();
 const cashAvailable = () => boxTotal() - principalOut();
 const lendable = () => Math.max(0, cashAvailable() - committedPrincipal());
 const maxLoanFor = pid => totalSaved(pid) * cfg().loanMultiplier;
@@ -540,13 +659,13 @@ function donut(parts) {
 function navFor(role) {
   if (role === "member") return [
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
-    { k: "savings", label: "Savings" }, { k: "loans", label: "Loans" },
+    { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
     { k: "earnings", label: "Earnings" }, { k: "request", label: "Request a loan", ask: true },
     { k: "profile", label: "Profile" }
   ];
   return [
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
-    { k: "savings", label: "Savings" }, { k: "loans", label: "Loans" },
+    { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
     { k: "requested", label: "Requested Loan" },
     { k: "earnings", label: "Earnings" }, { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
   ];
@@ -597,6 +716,7 @@ function page() {
   switch (S.route) {
     case "members": return S.ledgerFor ? ledgerView() : membersView();
     case "savings": return savingsView();
+    case "rates": return rateContributionsView();
     case "loans": return loansView();
     case "requested": return requestedLoansView();
     case "earnings": return earningsView();
@@ -642,7 +762,7 @@ function vaultHero() {
     '<p class="caption">In the box today</p><div class="amount">' + num(box) + '<span>RWF</span></div></div>' +
     '<div class="side">' +
       '<div><b>' + num(groupContributions()) + '</b><small>Saved by members</small></div>' +
-      '<div><b>' + num(feesTotal()) + '</b><small>Rate contributions</small></div>' +
+      '<div><b>' + num(feesTotal() + rateSavingsUnallocated()) + '</b><small>Rate contributions</small></div>' +
       '<div><b>' + num(interestCollected()) + '</b><small>Interest earned</small></div>' +
     '</div></div>' +
     '<div class="bar"><i class="out" style="width:' + pctOut + '%"></i><i class="avail" style="width:' + (100 - pctOut) + '%"></i></div>' +
@@ -685,7 +805,7 @@ function adminDashboard() {
       '<section class="panel"><header><div><h3>Loans out</h3><p>How much of each loan has come back</p></div></header><div class="body">' +
         (live.length ? hbars(live.map(l => ({
           label: (personById(l.personId) || {}).name || "?",
-          right: money(loanRepaid(l.id)) + " of " + money(l.total),
+          right: money(loanRepaid(l.id) + loanInterestCreditForLoan(l.id)) + " of " + money((Number(l.principal) || 0) + loanInterestDue(l)),
           parts: [{ value: loanRepaid(l.id), color: "var(--green)" }, { value: loanBalance(l), color: "var(--brass)" }]
         }))) + '<div class="barkey" style="margin-top:6px"><span><i style="background:var(--green)"></i>Repaid</span><span><i style="background:var(--brass)"></i>Still out</span></div>'
         : '<p class="mini">No money is out on loan.</p>') +
@@ -703,9 +823,9 @@ function adminDashboard() {
 
       '<section class="panel"><header><div><h3>Interest per loan</h3><p>Expected against collected</p></div></header><div class="body">' +
         (S.loans.length ? hbars(S.loans.map(l => ({
-          label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + (l.rate * 100) + "%",
-          right: money(loanInterestPaid(l.id)) + " of " + money(l.interest),
-          parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: l.interest - loanInterestPaid(l.id), color: "var(--line)" }]
+          label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + (l.rate * 100) + "% / month",
+          right: money(loanInterestPaid(l.id)) + " of " + money(loanInterestDue(l)),
+          parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)), color: "var(--line)" }]
         }))) : '<p class="mini">No loans recorded yet.</p>') +
       '</div></section>' +
     '</div>' +
@@ -744,7 +864,7 @@ function memberDashboard() {
 
       '<section class="panel"><header><div><h3>Your loan</h3></div></header><div class="body">' +
         (open ? '<div class="calcout"><div><span>Loan</span><b>' + money(open.principal) + '</b></div>' +
-          '<div><span>Interest at ' + (open.rate * 100) + '%</span><b>' + money(open.interest) + '</b></div>' +
+          '<div><span>Interest at ' + (open.rate * 100) + '% / month</span><b>' + money(loanInterestDue(open)) + '</b></div>' +
           '<div><span>Repaid so far</span><b>' + money(loanRepaid(open.id)) + '</b></div>' +
           '<div class="total"><span>Still owing</span><b>' + money(loanBalance(open)) + '</b></div></div>' +
           hbars([{ label: open.number, right: open.dueDate ? "due " + fmtDate(open.dueDate) : "not paid out yet",
@@ -770,7 +890,7 @@ function loanRow(l) {
   const days = l.dueDate ? daysFromToday(l.dueDate) : null;
   return '<tr data-act="loan" data-id="' + l.id + '" style="cursor:pointer">' +
     '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div></td>' +
-    '<td class="num">' + money(l.principal) + '<div class="mini">repay ' + money(l.total) + '</div></td>' +
+    '<td class="num">' + money(l.principal) + '<div class="mini">repay ' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</div></td>' +
     '<td><span class="tag ' + (over ? "red" : STATE_TAG[l.status]) + '">' + (over ? "Overdue" : STATE_LABEL[l.status]) + '</span>' +
       (l.status === "disbursed" && days !== null ? '<div class="mini">' + (days >= 0 ? days + " days left" : (-days) + " days late") + '</div>' : "") + '</td>' +
     '<td class="num"><div class="rowacts">' +
@@ -822,10 +942,10 @@ function ledgerView(forced) {
     '</div>' +
     '<section class="panel"><header><div><h3>Month by month</h3></div>' +
     (isAdmin() && canWrite() ? '<button class="btn small" data-act="modal" data-m="savings-quick" data-id="' + p.id + '">Record a payment</button>' : "") + '</header>' +
-    '<div class="scroll"><table><thead><tr><th>Month</th><th class="num">Due</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>' +
+    '<div class="scroll"><table><thead><tr><th>Month</th><th class="num">Due</th><th class="num">Contribution paid</th><th class="num">Rate paid</th><th>Status</th></tr></thead><tbody>' +
     ops.map(per => {
-      const amt = savingsFor(p.id, per), st = savingStatus(amt, req);
-      return '<tr><td>' + fmtPeriod(per) + '</td><td class="num muted">' + num(req) + '</td><td class="num">' + num(amt) + '</td>' +
+      const amt = savingsFor(p.id, per), ratePaid = Math.max(0, rawSavingsFor(p.id, per) - amt), st = savingStatus(amt, req);
+      return '<tr><td>' + fmtPeriod(per) + '</td><td class="num muted">' + num(req) + '</td><td class="num">' + num(amt) + '</td><td class="num">' + num(ratePaid) + '</td>' +
         '<td><span class="dot ' + (st === "paid" ? "ok" : st === "partial" ? "part" : "no") + '">' +
         (st === "paid" ? "Paid" : st === "partial" ? "Part paid" : "Not paid") + '</span></td></tr>';
     }).join("") + '</tbody></table></div></section>' +
@@ -845,6 +965,7 @@ function savingsView() {
   const per = S.period || thisPeriod();
   const people = activePeople();
   const collected = monthTotal(per), due = monthExpected(per);
+  const ratePaid = people.reduce((sum, p) => sum + Math.max(0, rawSavingsFor(p.id, per) - monthlyOf(p)), 0);
   const editable = isAdmin() && canWrite();
   return '<div class="pagehead"><div><h2>Savings</h2><p>One sheet per month. Record what each member actually paid in.</p></div>' +
     '<div class="inline" style="flex:0 1 auto"><button class="btn small" data-act="per" data-d="-1">Previous</button>' +
@@ -855,24 +976,61 @@ function savingsView() {
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(collected) + '</b><small>Collected in ' + fmtPeriodShort(per) + '</small></div>' +
       '<div class="stat"><b>' + money(due) + '</b><small>Expected</small></div>' +
+      '<div class="stat"><b>' + money(ratePaid) + '</b><small>Rate paid in ' + fmtPeriodShort(per) + '</small></div>' +
       '<div class="stat"><b>' + money(Math.max(0, due - collected)) + '</b><small>Still outstanding</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>' + fmtPeriod(per) + '</h3>' +
-      '<p>' + (editable ? "Type the amount received and save the row." : "Admins record payments here.") + '</p></div>' +
+      '<p>' + (editable ? "Type the total received, including any rate payment above the normal contribution." : "Admins record payments here.") + '</p></div>' +
       '<button class="btn small" data-act="csv" data-p="' + per + '">Export CSV</button></header>' +
-    (people.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Due</th><th class="num">Paid</th><th>Status</th>' +
+    (people.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Due</th><th class="num">Contribution paid</th><th class="num">Rate paid</th><th>Status</th>' +
       (editable ? "<th></th>" : "") + '</tr></thead><tbody>' + people.map(p => {
-        const req = monthlyOf(p), amt = savingsFor(p.id, per), st = savingStatus(amt, req);
+        const req = monthlyOf(p), amt = savingsFor(p.id, per), total = rawSavingsFor(p.id, per);
+        const ratePaid = Math.max(0, total - amt), st = savingStatus(amt, req);
         const yet = memberSince(p) <= per;
         return '<tr><td class="name">' + esc(p.name) + (yet ? "" : '<div class="mini">joined later</div>') + '</td>' +
           '<td class="num muted">' + (yet ? num(req) : "\u2014") + '</td>' +
-          '<td class="num">' + (editable && yet ? '<input type="number" id="sv_' + p.id + '" value="' + amt + '" style="max-width:130px;text-align:right">' : num(amt)) + '</td>' +
+          '<td class="num">' + (editable && yet ? '<input type="number" id="sv_' + p.id + '" value="' + total + '" style="max-width:130px;text-align:right">' : num(amt)) + '</td>' +
+          '<td class="num">' + num(ratePaid) + '</td>' +
           '<td><span class="dot ' + (st === "paid" ? "ok" : st === "partial" ? "part" : "no") + '">' +
             (st === "paid" ? "Paid" : st === "partial" ? "Part paid" : "Not paid") + '</span></td>' +
           (editable ? '<td class="num"><div class="rowacts">' + (yet ?
             '<button class="btn small" data-act="savefull" data-id="' + p.id + '">Full</button>' +
             '<button class="btn small primary" data-act="saverow" data-id="' + p.id + '">Save</button>' : "") + '</div></td>' : "") + '</tr>';
       }).join("") + '</tbody></table></div>' : '<div class="empty">No members yet.</div>') + '</section>';
+}
+
+function rateContributionsView() {
+  const rows = activePeople().map(p => ({ person: p, rate: rateDetails(p) }));
+  const accrued = rows.reduce((sum, row) => sum + row.rate.accrued, 0);
+  const paid = rows.reduce((sum, row) => sum + row.rate.paid, 0);
+  const outstanding = rows.reduce((sum, row) => sum + row.rate.outstanding, 0);
+  const editable = isAdmin() && canWrite();
+  return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Late contributions incur a simple 1% daily rate starting on the 16th of each month.</p></div>' +
+    (editable ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + money(accrued) + '</b><small>Rate accrued</small></div>' +
+      '<div class="stat"><b>' + money(paid) + '</b><small>1% penalty paid</small></div>' +
+      '<div class="stat"><b>' + money(outstanding) + '</b><small>Rate outstanding</small></div>' +
+    '</div>' +
+    '<section class="panel"><header><div><h3>Member rate balances</h3>' +
+      '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
+    (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
+      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">1% penalty paid</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Loan interest credited</th><th class="num">Advance interest credit</th></tr></thead><tbody>' +
+      rows.map(({ person, rate }) => {
+        const interestCredits = loanInterestCreditAllocations(person.id);
+        const applied = Object.keys(interestCredits.byLoan).reduce((sum, id) => sum + interestCredits.byLoan[id], 0);
+        return '<tr><td class="name">' + esc(person.name) + '</td>' +
+        '<td class="num">' + money(rate.unpaidContribution) + '</td>' +
+        '<td class="num">' + num(rate.lateDays) + '</td>' +
+        '<td class="num">' + money(rate.dailyRate) + '</td>' +
+        '<td class="num">' + money(rate.accrued) + '</td>' +
+        '<td class="num">' + money(rate.paid) + '</td>' +
+        '<td class="num">' + (rate.outstanding ? '<span class="dot no">' + money(rate.outstanding) + '</span>' : '<span class="dot ok">' + money(0) + '</span>') + '</td>' +
+        '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td></tr>';
+      }).join("") +
+      '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
+    '<p class="hint">Late contributions accrue a simple 1% daily penalty from the 16th. Extra payments cover that penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
 }
 
 /* ============================================================
@@ -958,8 +1116,8 @@ function loanDetail(l) {
     '<dt>Total savings at request</dt><dd>' + money(l.savingsAtRequest || 0) + '</dd>' +
     '<dt>Maximum allowed</dt><dd>' + money(l.maxAtRequest || 0) + '</dd>' +
     '<dt>Loan amount</dt><dd>' + money(l.principal) + '</dd>' +
-    '<dt>Interest at ' + (l.rate * 100) + '%</dt><dd>' + money(l.interest) + '</dd>' +
-    '<dt>Total to repay</dt><dd>' + money(l.total) + '</dd>' +
+    '<dt>Interest at ' + (l.rate * 100) + '% per month</dt><dd>' + money(loanInterestDue(l)) + '</dd>' +
+    '<dt>Total to repay</dt><dd>' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</dd>' +
     '<dt>Repayment period</dt><dd>' + (l.days || c.repaymentDays) + ' days</dd>' +
     '<dt>Paid out on</dt><dd>' + fmtDate(l.disbursedAt) + '</dd>' +
     '<dt>Due</dt><dd>' + fmtDate(l.dueDate) + '</dd></dl>' +
@@ -1012,13 +1170,13 @@ function earningsView() {
       '<div class="stat"><b>' + money(interestCollected()) + '</b><small>Interest collected, all time</small></div>' +
       '<div class="stat"><b>' + money(distributedEarnings()) + '</b><small>Already shared out</small></div>' +
       '<div class="stat"><b>' + money(pool) + '</b><small>Waiting to be shared</small></div>' +
-      '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? l.interest - loanInterestPaid(l.id) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
+      '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
     '</div>' +
-    '<section class="panel"><header><div><h3>Interest on each loan</h3><p>Collected against expected</p></div></header><div class="body">' +
+    '<section class="panel"><header><div><h3>Interest on each loan</h3><p>Accrued at the loan rate each month against outstanding principal</p></div></header><div class="body">' +
     (S.loans.length ? hbars(S.loans.map(l => ({
-      label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + esc(l.number) + " \u00b7 " + (l.rate * 100) + "%",
-      right: money(loanInterestPaid(l.id)) + " of " + money(l.interest),
-      parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, l.interest - loanInterestPaid(l.id)), color: "var(--line)" }]
+      label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + esc(l.number) + " \u00b7 " + (l.rate * 100) + "% / month",
+      right: money(loanInterestPaid(l.id)) + " of " + money(loanInterestDue(l)),
+      parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)), color: "var(--line)" }]
     }))) : '<p class="mini">No loans recorded yet.</p>') + '</div></section>' +
     '<section class="panel"><header><div><h3>If you shared it out today</h3>' +
       '<p>' + (c.distribution === "equal" ? "Split equally between active members" : "Split in proportion to savings") + '</p></div>' +
@@ -1072,7 +1230,7 @@ function settingsView() {
     '<div class="inline"><label class="f"><span>Default monthly saving</span><input type="number" id="s_contrib" value="' + c.monthlyContribution + '"' + (admin ? "" : " disabled") + '></label>' +
     '<label class="f"><span>Loan multiplier</span><input type="number" step="0.1" id="s_mult" value="' + c.loanMultiplier + '"' + (admin ? "" : " disabled") + '></label></div>' +
     '<p class="hint">Members who save a different amount, like the 50,000 savers, have their own figure set on their member record.</p>' +
-    '<div class="inline"><label class="f"><span>Interest on new loans (%)</span><input type="number" step="0.5" id="s_rate" value="' + (c.interestRate * 100) + '"' + (admin ? "" : " disabled") + '></label>' +
+    '<div class="inline"><label class="f"><span>Monthly interest on new loans (%)</span><input type="number" step="0.5" id="s_rate" value="' + (c.interestRate * 100) + '"' + (admin ? "" : " disabled") + '></label>' +
     '<label class="f"><span>Days to repay</span><input type="number" id="s_days" value="' + c.repaymentDays + '"' + (admin ? "" : " disabled") + '></label></div>' +
     '<div class="inline"><label class="f"><span>Sharing earnings</span><select id="s_dist"' + (admin ? "" : " disabled") + '>' +
       '<option value="equal"' + (c.distribution === "equal" ? " selected" : "") + '>Equal share for every member</option>' +
@@ -1180,7 +1338,7 @@ function requestModal() {
       '<div class="calcout" id="r_limits"></div>' +
       '<label class="f"><span>Amount you want</span><input type="number" id="r_amount" data-act="rquote" placeholder="0"></label>' +
       '<div class="calcout" id="r_quote"></div>' +
-      '<p class="hint">Interest is ' + (cfg().interestRate * 100) + '% of the loan, and the whole amount is due ' + cfg().repaymentDays + ' days after the money reaches you.</p>',
+      '<p class="hint">Interest accrues at ' + (cfg().interestRate * 100) + '% per month on the outstanding principal. Repayment is due in ' + cfg().repaymentDays + ' days.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="submitloan">Send for approval</button>'
   };
 }
@@ -1196,8 +1354,8 @@ function refreshQuote() {
   if (!amt) { q.innerHTML = '<div class="muted">Enter an amount to see the interest and what you would repay.</div>'; return; }
   const k = quoteLoan(amt), errs = validateLoanRequest(pid, amt);
   q.innerHTML = '<div><span>Loan</span><b>' + money(k.principal) + '</b></div>' +
-    '<div><span>Interest at ' + (cfg().interestRate * 100) + '%</span><b>' + money(k.interest) + '</b></div>' +
-    '<div class="total"><span>Repay within ' + k.days + ' days</span><b>' + money(k.total) + '</b></div>' +
+    '<div><span>First month interest at ' + (cfg().interestRate * 100) + '% / month</span><b>' + money(k.interest) + '</b></div>' +
+    '<div class="total"><span>First month total (repay within ' + k.days + ' days)</span><b>' + money(k.total) + '</b></div>' +
     (errs.length ? '<div style="color:var(--red);padding-top:8px">' + esc(errs[0]) + '</div>' : "");
 }
 
@@ -1220,7 +1378,7 @@ function disburseModal(m) {
       '. The ' + (l.days || cfg().repaymentDays) + '-day clock starts on this date.</p>' +
       '<label class="f"><span>Date the money was handed over</span><input type="date" id="d_date" value="' + todayISO() + '"></label>' +
       '<div class="calcout"><div><span>Due date</span><b id="d_due">' + fmtDate(addDays(todayISO(), l.days || cfg().repaymentDays)) + '</b></div>' +
-      '<div class="total"><span>Amount to come back</span><b>' + money(l.total) + '</b></div></div>',
+      '<div class="total"><span>First month total</span><b>' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</b></div></div>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dodisburse" data-id="' + l.id + '">Confirm payout</button>' };
 }
 function repayModal(m) {
@@ -1338,7 +1496,9 @@ async function onAct(act, el) {
   /* ---- savings ---- */
   if (act === "saverow" || act === "savefull") {
     const per = S.period || thisPeriod();
-    const amount = act === "savefull" ? monthlyOf(personById(id)) : Number(($("#sv_" + id) || {}).value) || 0;
+    const amount = act === "savefull"
+      ? Math.max(monthlyOf(personById(id)), rawSavingsFor(id, per))
+      : Number(($("#sv_" + id) || {}).value) || 0;
     await recordSaving(id, per, amount); return;
   }
   if (act === "quicksave") {
@@ -1399,7 +1559,7 @@ async function onAct(act, el) {
     if (amt <= 0) { S.formErr = "Enter the amount received."; render(); return; }
     const rid = uid();
     await put("repayments/" + rid, { id: rid, loanId: l.id, amount: Math.round(amt), at: val("p_date") || todayISO(), by: me().name });
-    if (loanRepaid(l.id) + amt >= l.total - 1) await put("loans/" + l.id, Object.assign({}, l, { status: "closed", closedAt: val("p_date") || todayISO() }));
+    if (loanBalance(l) - amt <= 1) await put("loans/" + l.id, Object.assign({}, l, { status: "closed", closedAt: val("p_date") || todayISO() }));
     await logEvent("loan", "Repayment of " + money(amt) + " on " + l.number);
     S.modal = null; toast("Repayment recorded"); return;
   }
@@ -1439,9 +1599,9 @@ async function recordSaving(personId, period, amount) {
 }
 
 async function exportCSV(period) {
-  const rows = [["Member", "Month", "Required", "Paid", "Status"]].concat(activePeople().map(p => {
-    const req = monthlyOf(p), amt = savingsFor(p.id, period);
-    return [p.name, period, req, amt, savingStatus(amt, req)];
+  const rows = [["Member", "Month", "Required", "Contribution paid", "Rate paid", "Status"]].concat(activePeople().map(p => {
+    const req = monthlyOf(p), amt = savingsFor(p.id, period), ratePaid = Math.max(0, rawSavingsFor(p.id, period) - amt);
+    return [p.name, period, req, amt, ratePaid, savingStatus(amt, req)];
   }));
   const csv = rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(",")).join("\n");
   saveFile("savings-" + period + ".csv", csv, "text/csv");

@@ -4,7 +4,7 @@ Two static pages plus a database schema. No server code, no build step,
 no paid tier of anything.
 
 - `index.html` — the public home page
-- `ledger.html` — the app: logins, dashboards, savings, loans, earnings
+- `ledger.html` — the app: logins, dashboards, savings, daily rate contributions, loans, earnings
 - `schema.sql` — run once in Supabase to create the database
 
 ## 1. Create a free Supabase project (the database)
@@ -42,6 +42,13 @@ earlier instructions). Click **Sign in**, and you should land on a
 "Load the contribution book" screen. Click it once to seed your eight
 members, their savings, and their existing loans. From then on the
 data lives in Supabase, not in the page.
+
+The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
+monthly contributions starting on the 16th. Amounts paid above the normal
+contribution cover that penalty first, then accrued loan interest at the loan's
+monthly rate (3% by default) on outstanding principal. Any remaining amount is
+carried forward as an interest credit; it does not count toward savings or
+reduce loan principal.
 
 ## 4. Put it online for free
 
