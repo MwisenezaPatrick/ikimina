@@ -348,12 +348,14 @@ function rateDetails(p, asOf) {
   const roundedAccrued = Math.round(accrued);
   const roundedFees = Math.round(feeCredits);
   const roundedOverpayments = Math.round(overpaymentCredits);
-  const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - roundedFees));
-  const roundedPaid = Math.min(roundedAccrued, roundedFees + roundedOverpayments);
+  const feeToPenalty = Math.min(roundedAccrued, roundedFees);
+  const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - feeToPenalty));
+  const roundedPaid = roundedFees + overpaymentToPenalty;
   return {
     accrued: roundedAccrued,
     paid: roundedPaid,
     outstanding: Math.max(0, roundedAccrued - roundedPaid),
+    penaltyCredit: Math.max(0, roundedFees - roundedAccrued),
     loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
     unpaidContribution: Math.round(unpaidContribution),
     dailyRate: Math.round(unpaidContribution * 0.01),
@@ -526,9 +528,10 @@ const BOOK = [
   { id: "chadia", name: "Chadia", monthly: 25000, role: "admin", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
   { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", pw: "Ramathan", loan: 0 },
   { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", pw: "Charlotte", loan: 0 },
-  { id: "patrick", name: "Patrick", monthly: 25000, role: "supervisor", email: "patrick@gmail.com", pw: "Patrick", loan: 0 }
+  { id: "patrick", name: "Patrick", monthly: 25000, role: "supervisor", email: "patrick@gmail.com", pw: "Patrick", loan: 0, ratePayment: 250 }
 ];
-const BOOK_MONTHS = ["2026-06", "2026-07", "2026-08", "2026-09"];
+const BOOK_MONTHS = ["2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+const UNPAID_BOOK_MONTHS = { "2026-10": ["eric", "charlotte"] };
 
 async function seedBook() {
   S.busy = true; render();
@@ -544,9 +547,19 @@ async function seedBook() {
       passHash: await hashPw(b.pw), createdAt: nowISO()
     });
     for (const m of BOOK_MONTHS) {
-      await put("savings/" + b.id + "__" + m, { id: b.id + "__" + m, personId: b.id, period: m, amount: b.monthly, recordedAt: nowISO(), recordedBy: "Contribution book" });
+      if ((UNPAID_BOOK_MONTHS[m] || []).includes(b.id)) continue;
+      const paidOn = m === "2026-10" && b.id === "patrick" ? "2026-10-16" : m + "-15";
+      await put("savings/" + b.id + "__" + m, {
+        id: b.id + "__" + m, personId: b.id, period: m, amount: b.monthly,
+        recordedAt: paidOn + "T12:00:00.000Z",
+        recordedBy: m === "2026-10" && b.id === "patrick" ? "Contribution book payment" : "Contribution book"
+      });
     }
     if (b.fee) await put("fees/fee_" + b.id, { id: "fee_" + b.id, personId: b.id, amount: b.fee, label: "Rate contribution (1%)", at: "2026-09-01" });
+    if (b.ratePayment) await put("fees/fee_" + b.id + "_2026-10", {
+      id: "fee_" + b.id + "_2026-10", personId: b.id, amount: b.ratePayment,
+      label: "Rate contribution (1%)", at: "2026-10-16"
+    });
     if (b.loan) {
       const rate = 0.03, interest = Math.round(b.loan * rate);
       const lid = "loan_" + b.id;
@@ -561,7 +574,7 @@ async function seedBook() {
       });
     }
   }
-  await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Sep 2026");
+  await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Oct 2026");
   S.busy = false;
   toast("Contribution book loaded");
 }
@@ -734,7 +747,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to September 2026, the three loans running, and Chadia\u2019s 250 rate contribution. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, Candide\u2019s RWF 16,800 first-month interest on a RWF 560,000 loan, Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -1004,19 +1017,21 @@ function rateContributionsView() {
   const accrued = rows.reduce((sum, row) => sum + row.rate.accrued, 0);
   const paid = rows.reduce((sum, row) => sum + row.rate.paid, 0);
   const outstanding = rows.reduce((sum, row) => sum + row.rate.outstanding, 0);
+  const penaltyCredit = rows.reduce((sum, row) => sum + row.rate.penaltyCredit, 0);
   const editable = isAdmin() && canWrite();
   return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Late contributions incur a simple 1% daily rate starting on the 16th of each month.</p></div>' +
     (editable ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(accrued) + '</b><small>Rate accrued</small></div>' +
-      '<div class="stat"><b>' + money(paid) + '</b><small>1% penalty paid</small></div>' +
+      '<div class="stat"><b>' + money(paid) + '</b><small>Rate contributions received</small></div>' +
       '<div class="stat"><b>' + money(outstanding) + '</b><small>Rate outstanding</small></div>' +
+      '<div class="stat"><b>' + money(penaltyCredit) + '</b><small>Rate credit remaining</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>Member rate balances</h3>' +
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
-      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">1% penalty paid</th><th class="num">Penalty outstanding</th>' +
-      '<th class="num">Loan interest credited</th><th class="num">Advance interest credit</th></tr></thead><tbody>' +
+      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Advance interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
         const applied = Object.keys(interestCredits.byLoan).reduce((sum, id) => sum + interestCredits.byLoan[id], 0);
@@ -1027,7 +1042,9 @@ function rateContributionsView() {
         '<td class="num">' + money(rate.accrued) + '</td>' +
         '<td class="num">' + money(rate.paid) + '</td>' +
         '<td class="num">' + (rate.outstanding ? '<span class="dot no">' + money(rate.outstanding) + '</span>' : '<span class="dot ok">' + money(0) + '</span>') + '</td>' +
-        '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td></tr>';
+        '<td class="num">' + money(rate.penaltyCredit) + '</td>' +
+        '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td>' +
+        (editable ? '<td><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
     '<p class="hint">Late contributions accrue a simple 1% daily penalty from the 16th. Extra payments cover that penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
@@ -1255,7 +1272,7 @@ function modalView() {
   const m = S.modal;
   const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
-    editme: editMeModal, password: passwordModal, resetpw: resetPwModal }[m.m];
+    editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal }[m.m];
   if (!f) return "";
   const v = f(m);
   return '<div class="veil" data-act="veil"><div class="modal" role="dialog" aria-modal="true">' +
@@ -1323,6 +1340,25 @@ function quickSaveModal(m) {
       '<label class="f"><span>Amount received</span><input type="number" id="q_amount" value="' + monthlyOf(personById(pick)) + '"></label></div>' +
       '<p class="hint">This replaces whatever is recorded for that member in that month.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="quicksave">Record payment</button>'
+  };
+}
+function ratePaymentsModal(m) {
+  const p = personById(m.id);
+  if (!p) return { title: "Rate payments", body: '<p class="mini">This member is no longer available.</p>' };
+  const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""))
+    .slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  const paymentFields = fees.map(f =>
+    '<div class="inline"><label class="f"><span>Paid amount on ' + fmtDate(f.at) + '</span><input type="number" min="0" step="1" id="rate_amount_' + esc(f.id) + '" value="' + (Number(f.amount) || 0) + '"></label>' +
+    '<label class="f"><span>Payment date</span><input type="date" id="rate_date_' + esc(f.id) + '" value="' + esc((f.at || todayISO()).slice(0, 10)) + '"></label></div>'
+  ).join("");
+  return {
+    title: "Edit rate payments for " + esc(p.name),
+    body: (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
+      '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
+      '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
+      '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
+      '<p class="hint">Editing updates the recorded rate amount and date. New payments are added separately.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
 }
 
@@ -1506,6 +1542,36 @@ async function onAct(act, el) {
     if (!pid) { S.formErr = "Pick a member."; render(); return; }
     await recordSaving(pid, val("q_period"), valn("q_amount"));
     S.modal = null; return;
+  }
+  if (act === "save-rate-payments") {
+    if (!isAdmin() || !canWrite()) { S.formErr = "Only an admin can edit rate payments."; render(); return; }
+    const p = personById(id);
+    if (!p) { S.formErr = "That member could not be found."; render(); return; }
+    const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""));
+    const updates = [];
+    for (const fee of fees) {
+      const amountText = val("rate_amount_" + fee.id), amount = Number(amountText);
+      const at = val("rate_date_" + fee.id);
+      if (amountText === "" || !Number.isFinite(amount) || amount < 0) {
+        S.formErr = "Enter a valid rate payment amount for every recorded payment."; render(); return;
+      }
+      if (!at) { S.formErr = "Choose a date for every recorded rate payment."; render(); return; }
+      updates.push(Object.assign({}, fee, { amount: Math.round(amount), at }));
+    }
+    const newAmountText = val("rate_new_amount");
+    if (newAmountText !== "") {
+      const amount = Number(newAmountText), at = val("rate_new_date");
+      if (!Number.isFinite(amount) || amount < 0) { S.formErr = "Enter a valid amount for the new rate payment."; render(); return; }
+      if (amount > 0 && !at) { S.formErr = "Choose a date for the new rate payment."; render(); return; }
+      if (amount > 0) {
+        const feeId = "fee_" + uid();
+        updates.push({ id: feeId, personId: p.id, amount: Math.round(amount), label: "Rate contribution (1%)", at });
+      }
+    }
+    for (const fee of updates) await put("fees/" + fee.id, fee);
+    S.fees = S.fees.filter(f => !(f.personId === p.id && /rate/i.test(f.label || ""))).concat(updates);
+    await logEvent("rate", "Updated rate payments for " + p.name);
+    S.modal = null; toast("Rate payments saved"); return;
   }
   if (act === "csv") { exportCSV(el.getAttribute("data-p")); return; }
 
