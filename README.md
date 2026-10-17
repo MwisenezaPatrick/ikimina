@@ -67,8 +67,9 @@ Secretary in order. An officer may approve a stage assigned to their current
 role; nobody may approve their own loan. Existing accounts with legacy Admin
 and Supervisor roles continue to work; Jules maps to President, Chadia to Vice
 President, and Supervisor accounts to Secretary.
-A President can approve only a request waiting on the President and cannot
-approve their own loan. Pending loan rows show why approval is unavailable.
+A President can approve only a request waiting on the President. Officers can
+delete pending loan applications after confirmation; loans with repayments
+cannot be deleted. Pending loan rows show why approval is unavailable.
 President, Vice President, and Secretary accounts also have a **Reports** page.
 Choose a contribution month to review the group summary, member balances,
 chargeable days, and loans. Use **Save as PDF** to print or save the report as
