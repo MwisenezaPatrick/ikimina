@@ -242,6 +242,16 @@ input[type=password]{width:100%;padding:9px 11px;border:1px solid var(--line);bo
   .shell{display:block;padding:0}
   .agreement{border:0;box-shadow:none;padding:0}
 }
+@media print{
+  @page{size:landscape;margin:12mm}
+  body.print-report #root > .shell > main > :not(.report-document){display:none!important}
+  body.print-report #root > .shell{max-width:none;margin:0;padding:0}
+  body.print-report #root > .shell > main{width:100%}
+  body.print-report .report-document{display:block!important;border:0;box-shadow:none;padding:0;color:#111;background:#fff}
+  body.print-report .report-document .scroll{overflow:visible}
+  body.print-report .report-document table{font-size:10px}
+  body.print-report .report-document th,body.print-report .report-document td{padding:5px;border:1px solid #bbb}
+}
 </style>
 </head>
 <body>
@@ -270,7 +280,7 @@ const S = {
   loaded: false, dbDown: false, configMissing: false, readOnly: false,
   settings: null, people: [], savings: [], loans: [], repayments: [],
   payouts: [], events: [], accounts: [], fees: [],
-  session: null, route: "dashboard", modal: null, period: null,
+  session: null, route: "dashboard", modal: null, period: null, reportPeriod: null,
   ledgerFor: null, toast: null, formErr: null, busy: false
 };
 
@@ -739,7 +749,7 @@ function navFor(role) {
   return [
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
     { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
-    { k: "requested", label: "Requested Loan" },
+    { k: "requested", label: "Requested Loan" }, { k: "reports", label: "Reports" },
     { k: "earnings", label: "Earnings" }, { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
   ];
 }
@@ -770,7 +780,8 @@ function render() {
       '<div class="brand"><span class="mark"></span><div><h1>' + esc(c.groupName) + '</h1><small>Savings &amp; loan ledger</small></div></div>' +
       '<nav class="nav">' + nav.map(tab).join("") + '</nav>' + whoAmI() +
     '</div><main>' + page() + '</main></div>' +
-    '<nav class="tabs">' + nav.filter(i => !i.ask).slice(0, 4).concat(nav.filter(i => i.k === "profile")).map(tab).join("") + '</nav>' +
+    '<nav class="tabs">' + nav.filter(i => !i.ask).slice(0, 4)
+      .concat(nav.filter(i => i.k === "profile" || i.k === "reports")).map(tab).join("") + '</nav>' +
     (S.toast ? '<div class="toast">' + esc(S.toast) + '</div>' : "");
   $("#layer").innerHTML = S.modal ? modalView() : "";
   wire();
@@ -791,6 +802,7 @@ function page() {
     case "rates": return rateContributionsView();
     case "loans": return loansView();
     case "requested": return requestedLoansView();
+    case "reports": return reportsView();
     case "earnings": return earningsView();
     case "profile": return profileView();
     case "settings": return settingsView();
@@ -1110,6 +1122,97 @@ function rateContributionsView() {
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
     '<p class="hint">Late contributions accrue a simple 1% daily penalty from the 16th. Extra payments cover that penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
+}
+
+function buildReportData(period) {
+  const people = activePeople().map(p => {
+    const rate = rateDetails(p);
+    const loans = loansOf(p.id);
+    return {
+      person: p,
+      required: memberSince(p) <= period ? monthlyOf(p) : 0,
+      contribution: savingsFor(p.id, period),
+      savings: totalSaved(p.id),
+      chargeableDays: rate.lateDays,
+      ratePaid: rate.paid,
+      rateOutstanding: rate.outstanding,
+      loanBalance: loans.reduce((sum, loan) => sum + loanBalance(loan), 0)
+    };
+  });
+  const loans = S.loans.map(loan => ({
+    loan,
+    person: personById(loan.personId),
+    interestPaid: loanInterestPaid(loan.id),
+    balance: loanBalance(loan)
+  }));
+  return {
+    period,
+    people,
+    loans,
+    totals: {
+      required: people.reduce((sum, row) => sum + row.required, 0),
+      contributions: people.reduce((sum, row) => sum + row.contribution, 0),
+      savings: people.reduce((sum, row) => sum + row.savings, 0),
+      ratePaid: people.reduce((sum, row) => sum + row.ratePaid, 0),
+      rateOutstanding: people.reduce((sum, row) => sum + row.rateOutstanding, 0),
+      loansOutstanding: loans.reduce((sum, row) => sum + row.balance, 0),
+      interestCollected: interestCollected(),
+      cashAvailable: cashAvailable()
+    }
+  };
+}
+
+function reportMemberTable(rows) {
+  return '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Monthly due</th>' +
+    '<th class="num">Contribution</th><th class="num">Savings to date</th><th class="num">Chargeable days</th>' +
+    '<th class="num">Rate contributions received</th><th class="num">Rate outstanding</th><th class="num">Loan balance</th>' +
+    '</tr></thead><tbody>' + rows.map(row =>
+      '<tr><td>' + esc(row.person.name) + '</td><td class="num">' + money(row.required) +
+      '</td><td class="num">' + money(row.contribution) + '</td><td class="num">' + money(row.savings) +
+      '</td><td class="num">' + num(row.chargeableDays) + '</td><td class="num">' + money(row.ratePaid) +
+      '</td><td class="num">' + money(row.rateOutstanding) + '</td><td class="num">' + money(row.loanBalance) + '</td></tr>'
+    ).join("") + '</tbody></table></div>';
+}
+
+function reportLoanTable(rows) {
+  return '<div class="scroll"><table><thead><tr><th>Borrower</th><th>Loan</th><th>Status</th>' +
+    '<th class="num">Principal</th><th class="num">Interest paid</th><th class="num">Balance</th>' +
+    '<th>Requested</th><th>Due</th></tr></thead><tbody>' + rows.map(row =>
+      '<tr><td>' + esc(row.person ? row.person.name : "Unknown") + '</td><td>' + esc(row.loan.number || "Loan") +
+      '</td><td>' + esc(STATE_LABEL[row.loan.status] || row.loan.status || "Unknown") +
+      '</td><td class="num">' + money(row.loan.principal) + '</td><td class="num">' + money(row.interestPaid) +
+      '</td><td class="num">' + money(row.balance) + '</td><td>' + fmtDate(row.loan.requestedAt) +
+      '</td><td>' + fmtDate(row.loan.dueDate) + '</td></tr>'
+    ).join("") + '</tbody></table></div>';
+}
+
+function reportsView() {
+  if (!isAdmin()) return '<div class="panel"><div class="empty"><b>Reports are for officers</b>Sign in with a President, Vice President, or Secretary account to access reports.</div></div>';
+  const period = S.reportPeriod || S.period || thisPeriod();
+  S.reportPeriod = period;
+  const report = buildReportData(period), t = report.totals;
+  return '<div class="report-document">' +
+    '<div class="pagehead"><div><h2>Group report</h2><p>' + esc(cfg().groupName) + ' · ' + fmtPeriod(period) +
+      ' · Generated ' + fmtDate(todayISO()) + '</p></div>' +
+      '<div class="inline report-controls noprint" style="flex:0 1 auto">' +
+      '<label class="f"><span>Contribution month</span><input type="month" data-act="reportperiod" value="' + esc(period) + '"></label>' +
+      '<button class="btn" data-act="report-excel">Download Excel</button>' +
+      '<button class="btn primary" data-act="report-pdf">Save as PDF</button></div></div>' +
+    '<div class="grid2" style="margin-bottom:18px">' +
+      '<div class="stat"><b>' + money(t.contributions) + '</b><small>Contributions in ' + fmtPeriodShort(period) + ' of ' + money(t.required) + ' expected</small></div>' +
+      '<div class="stat"><b>' + money(t.savings) + '</b><small>Member savings to date</small></div>' +
+      '<div class="stat"><b>' + money(t.ratePaid) + '</b><small>Rate contributions received</small></div>' +
+      '<div class="stat"><b>' + money(t.rateOutstanding) + '</b><small>Rate outstanding</small></div>' +
+      '<div class="stat"><b>' + money(t.loansOutstanding) + '</b><small>Outstanding loan balances</small></div>' +
+      '<div class="stat"><b>' + money(t.interestCollected) + '</b><small>Interest collected</small></div>' +
+      '<div class="stat"><b>' + money(t.cashAvailable) + '</b><small>Cash available</small></div>' +
+    '</div>' +
+    '<section class="panel"><header><div><h3>Member contributions and balances</h3><p>Chargeable days are calculated through today.</p></div></header>' +
+      reportMemberTable(report.people) + '</section>' +
+    '<section class="panel"><header><div><h3>Loans</h3></div></header>' +
+      (report.loans.length ? reportLoanTable(report.loans) : '<div class="empty">No loans recorded.</div>') + '</section>' +
+    '<p class="mini">Generated by ' + esc(me().name) + ' · ' + esc(roleLabel(myRole())) + '</p>' +
+    '</div>';
 }
 
 /* ============================================================
@@ -1648,6 +1751,15 @@ async function onAct(act, el) {
   S.formErr = null;
 
   if (act === "go") { S.route = el.getAttribute("data-k"); S.ledgerFor = null; window.scrollTo(0, 0); render(); return; }
+  if (act === "report-excel") { exportReportExcel(S.reportPeriod || S.period || thisPeriod()); return; }
+  if (act === "report-pdf") {
+    if (!isAdmin()) return;
+    const afterPrint = () => document.body.classList.remove("print-report");
+    window.addEventListener("afterprint", afterPrint, { once: true });
+    document.body.classList.add("print-report");
+    window.print();
+    return;
+  }
   if (act === "close" || act === "veil") { S.modal = null; render(); return; }
   if (act === "theme") {
     const cur = document.documentElement.getAttribute("data-theme");
@@ -1898,6 +2010,41 @@ async function exportCSV(period) {
   saveFile("savings-" + period + ".csv", csv, "text/csv");
 }
 
+function exportReportExcel(period) {
+  if (!isAdmin()) return;
+  const report = buildReportData(period), t = report.totals;
+  const memberRows = report.people.map(row => '<tr><td>' + esc(row.person.name) + '</td>' +
+    '<td>' + row.required + '</td><td>' + row.contribution + '</td><td>' + row.savings +
+    '</td><td>' + row.chargeableDays + '</td><td>' + row.ratePaid + '</td><td>' + row.rateOutstanding +
+    '</td><td>' + row.loanBalance + '</td></tr>').join("");
+  const loanRows = report.loans.map(row => '<tr><td>' + esc(row.person ? row.person.name : "Unknown") +
+    '</td><td>' + esc(row.loan.number || "Loan") + '</td><td>' +
+    esc(STATE_LABEL[row.loan.status] || row.loan.status || "Unknown") + '</td><td>' +
+    (Number(row.loan.principal) || 0) + '</td><td>' + row.interestPaid + '</td><td>' + row.balance +
+    '</td><td>' + esc(row.loan.requestedAt || "") + '</td><td>' + esc(row.loan.dueDate || "") + '</td></tr>').join("");
+  const content = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+    'body{font-family:Arial,sans-serif;color:#14221D}h1,h2{color:#1D5A47}table{border-collapse:collapse;margin-bottom:22px}' +
+    'th,td{border:1px solid #CCD4CC;padding:6px;text-align:left}th{background:#DCE8E0} .num{text-align:right}</style></head><body>' +
+    '<h1>' + esc(cfg().groupName) + ' — Group report</h1><p>Contribution month: ' + esc(period) +
+    ' · Generated: ' + esc(todayISO()) + ' · Prepared by: ' + esc(me().name) + '</p>' +
+    '<h2>Summary</h2><table><thead><tr><th>Measure</th><th>Amount (RWF)</th></tr></thead><tbody>' +
+    '<tr><td>Contributions in period</td><td>' + t.contributions + '</td></tr>' +
+    '<tr><td>Expected contributions</td><td>' + t.required + '</td></tr>' +
+    '<tr><td>Member savings to date</td><td>' + t.savings + '</td></tr>' +
+    '<tr><td>Rate contributions received</td><td>' + t.ratePaid + '</td></tr>' +
+    '<tr><td>Rate outstanding</td><td>' + t.rateOutstanding + '</td></tr>' +
+    '<tr><td>Outstanding loan balances</td><td>' + t.loansOutstanding + '</td></tr>' +
+    '<tr><td>Interest collected</td><td>' + t.interestCollected + '</td></tr>' +
+    '<tr><td>Cash available</td><td>' + t.cashAvailable + '</td></tr></tbody></table>' +
+    '<h2>Member balances</h2><table><thead><tr><th>Member</th><th>Monthly due</th><th>Contribution</th>' +
+    '<th>Savings to date</th><th>Chargeable days</th><th>Rate received</th><th>Rate outstanding</th><th>Loan balance</th>' +
+    '</tr></thead><tbody>' + memberRows + '</tbody></table>' +
+    '<h2>Loans</h2><table><thead><tr><th>Borrower</th><th>Loan</th><th>Status</th><th>Principal</th>' +
+    '<th>Interest paid</th><th>Balance</th><th>Requested</th><th>Due</th></tr></thead><tbody>' +
+    loanRows + '</tbody></table></body></html>';
+  saveFile("ikimina-report-" + period + ".xls", content, "application/vnd.ms-excel");
+}
+
 function saveFile(filename, content, mime) {
   const blob = new Blob([content], { type: mime || "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -1925,10 +2072,11 @@ function wire() {
     if (el._w) return;
     el._w = 1;
     const act = el.getAttribute("data-act");
-    if (act === "rquote" || act === "perpick" || act === "qsync") {
+    if (act === "rquote" || act === "perpick" || act === "qsync" || act === "reportperiod") {
       el.addEventListener(act === "qsync" ? "change" : "input", () => {
         if (act === "perpick") { S.period = el.value; render(); }
         else if (act === "qsync") onAct("qsync", el);
+        else if (act === "reportperiod") { S.reportPeriod = el.value || thisPeriod(); render(); }
         else refreshQuote();
       });
       return;

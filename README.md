@@ -66,6 +66,10 @@ continue to work; Jules maps to President, Chadia to Vice President, and
 Supervisor accounts to Secretary.
 A President can approve only a request waiting on the President and cannot
 approve their own loan. Pending loan rows show why approval is unavailable.
+President, Vice President, and Secretary accounts also have a **Reports** page.
+Choose a contribution month to review the group summary, member balances,
+chargeable days, and loans. Use **Save as PDF** to print or save the report as
+PDF, or **Download Excel** to export an Excel-compatible workbook file.
 
 ## 4. Put it online for free
 
