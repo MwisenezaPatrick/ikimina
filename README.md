@@ -67,6 +67,11 @@ Secretary in order. An officer may approve a stage assigned to their current
 role; nobody may approve their own loan. Existing accounts with legacy Admin
 and Supervisor roles continue to work; Jules maps to President, Chadia to Vice
 President, and Supervisor accounts to Secretary.
+Loan requests require a purpose and explicit acceptance of the agreement. The
+acceptance identity, timestamp, agreement version, and purpose are stored with
+the application. Applicants can download a filled draft after accepting; the
+final PDF uses the supplied agreement template and appends the submitted loan
+terms and acceptance record.
 A President can approve only a request waiting on the President. Officers can
 delete pending loan applications after confirmation; loans with repayments
 cannot be deleted. Pending loan rows show why approval is unavailable.
