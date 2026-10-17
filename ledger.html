@@ -498,13 +498,17 @@ const contributionInterestCollected = () => S.people.reduce((sum, p) => {
 const interestCollected = () => S.repayments.reduce((a, r) => a + splitPart(r, "interest"), 0) + contributionInterestCollected();
 const principalRepaid = () => S.loans.reduce((sum, l) => sum + loanPrincipalPaidFromRepayments(l.id), 0);
 function loanInterestPaid(id) { return loanInterestPaidFromRepayments(id) + loanInterestCreditForLoan(id); }
-const distributedEarnings = () => S.payouts.reduce((a, p) => a + (Number(p.total) || 0), 0);
+const cashExpenses = () => S.payouts.filter(p => p.type === "cash_expense")
+  .reduce((sum, expense) => sum + (Number(expense.total) || 0), 0);
+const distributedEarnings = () => S.payouts.filter(p => p.type !== "cash_expense")
+  .reduce((a, p) => a + (Number(p.total) || 0), 0);
 const disbursedPrincipal = () => S.loans.filter(l => l.disbursedAt).reduce((a, l) => a + (Number(l.principal) || 0), 0);
 const principalOut = () => Math.max(0, disbursedPrincipal() - principalRepaid());
 const committedPrincipal = () => S.loans.filter(l => l.status === "approved").reduce((a, l) => a + (Number(l.principal) || 0), 0);
-const earningsPool = () => interestCollected() - distributedEarnings();
+const earningsPool = () => interestCollected() - distributedEarnings() - cashExpenses();
 const rateSavingsUnallocated = () => Math.max(0, rateSavingsTotal() - contributionInterestCollected());
-const boxTotal = () => groupContributions() + feesTotal() + rateSavingsUnallocated() + interestCollected() - distributedEarnings();
+const boxTotal = () => groupContributions() + feesTotal() + rateSavingsUnallocated() + interestCollected() -
+  distributedEarnings() - cashExpenses();
 const cashAvailable = () => boxTotal() - principalOut();
 const lendable = () => Math.max(0, cashAvailable() - committedPrincipal());
 const maxLoanFor = pid => totalSaved(pid) * cfg().loanMultiplier;
@@ -858,6 +862,7 @@ function vaultHero() {
       '<div><b>' + num(groupContributions()) + '</b><small>Saved by members</small></div>' +
       '<div><b>' + num(feesTotal() + rateSavingsUnallocated()) + '</b><small>Rate contributions</small></div>' +
       '<div><b>' + num(interestCollected()) + '</b><small>Interest earned</small></div>' +
+      '<div><b>' + num(cashExpenses()) + '</b><small>Cash expenses</small></div>' +
     '</div></div>' +
     '<div class="bar"><i class="out" style="width:' + pctOut + '%"></i><i class="avail" style="width:' + (100 - pctOut) + '%"></i></div>' +
     '<div class="barkey"><span><i style="background:var(--brass)"></i>' + money(out) + ' out on loan</span>' +
@@ -882,6 +887,7 @@ function adminDashboard() {
 
   return '<div class="pagehead"><div><h2>Dashboard</h2><p>Where the group\u2019s money is sitting, and what needs a decision.</p></div>' +
     (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="book-corrections">Apply recorded book payments</button> ' : "") +
+    (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="cash-expense">Record cash expense</button> ' : "") +
     (canWrite() ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     vaultHero() +
     '<div class="grid2" style="margin-bottom:18px">' +
@@ -1118,7 +1124,7 @@ function rateContributionsView() {
     '<section class="panel"><header><div><h3>Member rate balances</h3>' +
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
-      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Current daily penalty (1%)</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
       '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Advance interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
@@ -1135,7 +1141,7 @@ function rateContributionsView() {
         (editable ? '<td><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">Late contributions accrue a simple 1% daily penalty from the 16th. Extra payments cover that penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
+    '<p class="hint">Chargeable days are counted across contribution months, while the 1% penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
 }
 
 function buildReportData(period) {
@@ -1171,6 +1177,7 @@ function buildReportData(period) {
       rateOutstanding: people.reduce((sum, row) => sum + row.rateOutstanding, 0),
       loansOutstanding: loans.reduce((sum, row) => sum + row.balance, 0),
       interestCollected: interestCollected(),
+      cashExpenses: cashExpenses(),
       cashAvailable: cashAvailable()
     }
   };
@@ -1219,6 +1226,7 @@ function reportsView() {
       '<div class="stat"><b>' + money(t.rateOutstanding) + '</b><small>Rate outstanding</small></div>' +
       '<div class="stat"><b>' + money(t.loansOutstanding) + '</b><small>Outstanding loan balances</small></div>' +
       '<div class="stat"><b>' + money(t.interestCollected) + '</b><small>Interest collected</small></div>' +
+      '<div class="stat"><b>' + money(t.cashExpenses) + '</b><small>Cash expenses, all time</small></div>' +
       '<div class="stat"><b>' + money(t.cashAvailable) + '</b><small>Cash available</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>Member contributions and balances</h3><p>Chargeable days are calculated through today.</p></div></header>' +
@@ -1374,6 +1382,7 @@ function earningsView() {
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(interestCollected()) + '</b><small>Interest collected, all time</small></div>' +
       '<div class="stat"><b>' + money(distributedEarnings()) + '</b><small>Already shared out</small></div>' +
+      '<div class="stat"><b>' + money(cashExpenses()) + '</b><small>Cash expenses, all time</small></div>' +
       '<div class="stat"><b>' + money(pool) + '</b><small>Waiting to be shared</small></div>' +
       '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
     '</div>' +
@@ -1390,11 +1399,18 @@ function earningsView() {
     people.map(p => '<tr><td class="name">' + esc(p.name) + '</td><td class="num muted">' + num(totalSaved(p.id)) + '</td>' +
       '<td class="num">' + money(shares[p.id] || 0) + '</td></tr>').join("") + '</tbody></table></div></section>' +
     '<section class="panel"><header><div><h3>Past distributions</h3></div></header>' +
-    (S.payouts.length ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Method</th><th class="num">Total</th><th class="num">Members</th></tr></thead><tbody>' +
-      S.payouts.slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(p => '<tr><td>' + fmtDate(p.at) + '</td>' +
+    (S.payouts.some(p => p.type !== "cash_expense") ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Method</th><th class="num">Total</th><th class="num">Members</th></tr></thead><tbody>' +
+      S.payouts.filter(p => p.type !== "cash_expense").slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(p => '<tr><td>' + fmtDate(p.at) + '</td>' +
         '<td class="mini">' + (p.method === "equal" ? "Equal shares" : "By savings") + '</td><td class="num">' + money(p.total) + '</td>' +
         '<td class="num muted">' + (p.shares ? p.shares.length : 0) + '</td></tr>').join("") + '</tbody></table></div>'
-      : '<div class="empty">Nothing shared out yet. Interest keeps building in the box.</div>') + '</section>';
+      : '<div class="empty">Nothing shared out yet. Interest keeps building in the box.</div>') + '</section>' +
+    '<section class="panel"><header><div><h3>Cash expenses</h3><p>Withdrawal and transfer charges reduce cash in the group box and available to lend.</p></div>' +
+      (isAdmin() && canWrite() ? '<button class="btn small" data-act="modal" data-m="cash-expense">Record cash expense</button>' : "") + '</header>' +
+    (S.payouts.some(p => p.type === "cash_expense") ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Description</th><th>Recorded by</th><th class="num">Amount</th></tr></thead><tbody>' +
+      S.payouts.filter(p => p.type === "cash_expense").slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(expense =>
+        '<tr><td>' + fmtDate(expense.at) + '</td><td>' + esc(expense.description) + '</td><td>' + esc(expense.by) +
+        '</td><td class="num">' + money(expense.total) + '</td></tr>').join("") + '</tbody></table></div>'
+      : '<div class="empty">No cash expenses recorded.</div>') + '</section>';
 }
 
 /* ============================================================
@@ -1460,6 +1476,7 @@ function modalView() {
   const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
     editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal,
+    "cash-expense": cashExpenseModal,
     "book-corrections": bookCorrectionsModal }[m.m];
   if (!f) return "";
   const v = f(m);
@@ -1781,7 +1798,10 @@ function loanModal(m) {
   const l = S.loans.find(x => x.id === m.id);
   if (!l) return { title: "Loan", body: '<p class="mini">This loan is no longer here.</p>' };
   return { title: esc(l.number), body: loanDetail(l),
-    foot: '<button class="btn" data-act="download" data-id="' + esc(l.id) + '">Download filled PDF agreement</button><button class="btn" data-act="close">Close</button>' };
+    foot: ((isAdmin() && canWrite() && (l.status || "").startsWith("pending") &&
+      !S.repayments.some(r => r.loanId === l.id))
+      ? '<button class="btn danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
+      '<button class="btn" data-act="download" data-id="' + esc(l.id) + '">Download filled PDF agreement</button><button class="btn" data-act="close">Close</button>' };
 }
 function rejectModal(m) {
   return { title: "Reject this loan",
@@ -1821,6 +1841,22 @@ function payoutModal() {
         '<td class="num">' + money(shares[p.id] || 0) + '</td></tr>').join("") + '</tbody></table></div>' +
       '<p class="hint">Recording this takes the money out of the box. Hand it over the same day so the ledger matches the cash.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dopayout">Share it out</button>' };
+}
+function cashExpenseModal() {
+  const modal = S.modal || {};
+  const amountText = modal.amount == null ? "" : String(modal.amount);
+  const amount = Number(amountText) || 0;
+  return {
+    title: "Record a cash expense",
+    body: '<div class="calcout"><div><span>Main balance</span><b>' + money(boxTotal()) + '</b></div>' +
+      '<div><span>Available to lend</span><b>' + money(cashAvailable()) + '</b></div>' +
+      '<div class="total"><span>Main balance after expense</span><b id="expense_balance_after">' + money(boxTotal() - amount) + '</b></div></div>' +
+      '<label class="f"><span>Expense description</span><input type="text" id="expense_description" data-act="cash-expense-field" data-field="description" maxlength="200" value="' + esc(modal.description || "") + '" placeholder="Bank withdrawal or money transfer charge"></label>' +
+      '<div class="inline"><label class="f"><span>Amount paid (RWF)</span><input type="number" id="expense_amount" data-act="cash-expense-amount" min="1" step="1" value="' + esc(amountText) + '" placeholder="0"></label>' +
+      '<label class="f"><span>Date paid</span><input type="date" id="expense_date" data-act="cash-expense-field" data-field="at" value="' + esc(modal.at || todayISO()) + '"></label></div>' +
+      '<p class="hint">This records an actual cash expense, reduces the main balance and available-to-lend amount, and is included in group reports.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-cash-expense">Save expense</button>'
+  };
 }
 
 /* ============================================================
@@ -2161,6 +2197,27 @@ async function onAct(act, el) {
     await logEvent("earnings", "Shared out " + money(total));
     S.modal = null; toast("Earnings shared out"); return;
   }
+  if (act === "save-cash-expense") {
+    if (!isAdmin() || !canWrite()) { toast("Only an officer can record a cash expense."); return; }
+    const description = val("expense_description"), amountText = val("expense_amount");
+    const amount = Number(amountText), at = val("expense_date");
+    if (S.modal) Object.assign(S.modal, { description, amount: amountText, at });
+    if (!description) { S.formErr = "Enter a description for the expense."; render(); return; }
+    if (!amountText || !Number.isFinite(amount) || amount <= 0) {
+      S.formErr = "Enter an expense amount greater than zero."; render(); return;
+    }
+    if (!Number.isInteger(amount)) { S.formErr = "Enter the expense as a whole number of RWF."; render(); return; }
+    const expenseDate = /^\d{4}-\d{2}-\d{2}$/.test(at) ? new Date(at + "T00:00:00Z") : null;
+    if (!expenseDate || !Number.isFinite(expenseDate.getTime()) || expenseDate.toISOString().slice(0, 10) !== at) {
+      S.formErr = "Choose a valid expense date."; render(); return;
+    }
+    const id = uid();
+    const expense = { id, type: "cash_expense", description, total: amount, at, by: me().name };
+    await put("payouts/" + id, expense);
+    S.payouts.push(expense);
+    await logEvent("expense", "Recorded cash expense: " + description + " · " + money(amount));
+    S.modal = null; toast("Cash expense recorded"); return;
+  }
 
   /* ---- settings ---- */
   if (act === "savecfg") {
@@ -2218,6 +2275,7 @@ function exportReportExcel(period) {
     '<tr><td>Rate outstanding</td><td>' + t.rateOutstanding + '</td></tr>' +
     '<tr><td>Outstanding loan balances</td><td>' + t.loansOutstanding + '</td></tr>' +
     '<tr><td>Interest collected</td><td>' + t.interestCollected + '</td></tr>' +
+    '<tr><td>Cash expenses (all time)</td><td>' + t.cashExpenses + '</td></tr>' +
     '<tr><td>Cash available</td><td>' + t.cashAvailable + '</td></tr></tbody></table>' +
     '<h2>Member balances</h2><table><thead><tr><th>Member</th><th>Monthly due</th><th>Contribution</th>' +
     '<th>Savings to date</th><th>Chargeable days</th><th>Rate received</th><th>Rate outstanding</th><th>Loan balance</th>' +
@@ -2426,6 +2484,20 @@ function wire() {
           S.modal.termsAcceptedByRole = roleLabel(myRole());
         } else clearLoanTermsAcceptance(S.modal);
         refreshLoanAcceptanceControls();
+      });
+      return;
+    }
+    if (act === "cash-expense-amount") {
+      el.addEventListener("input", () => {
+        if (S.modal && S.modal.m === "cash-expense") S.modal.amount = el.value;
+        const balance = $("#expense_balance_after");
+        if (balance) balance.textContent = money(boxTotal() - (Number(el.value) || 0));
+      });
+      return;
+    }
+    if (act === "cash-expense-field") {
+      el.addEventListener(el.type === "date" ? "change" : "input", () => {
+        if (S.modal && S.modal.m === "cash-expense") S.modal[el.getAttribute("data-field")] = el.value;
       });
       return;
     }
