@@ -56,6 +56,10 @@ contribution cover that penalty first, then accrued loan interest at the loan's
 monthly rate (3% by default) on outstanding principal. Any remaining amount is
 carried forward as an interest credit; it does not count toward savings or
 reduce loan principal.
+Loan requests require approval from the President, a different Vice President,
+and the Secretary. Existing accounts with legacy Admin and Supervisor roles
+continue to work; Jules maps to President, Chadia to Vice President, and
+Supervisor accounts to Secretary.
 
 ## 4. Put it online for free
 

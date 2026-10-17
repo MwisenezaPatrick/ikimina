@@ -295,10 +295,22 @@ const cfg = () => Object.assign({}, DEFAULTS, S.settings || {});
 const personById = id => S.people.find(p => p.id === id) || null;
 const account = () => S.accounts.find(a => a.id === S.session) || null;
 const me = () => { const a = account(); return a ? personById(a.personId) : null; };
-const myRole = () => { const p = me(); return p ? p.role : null; };
-const roleLabel = role => ({ member: "Member", admin: "Admin", supervisor: "Supervisor" }[role] || "Member");
-const isAdmin = () => ["admin", "supervisor"].includes(myRole());
-const isSupervisor = () => myRole() === "supervisor";
+const roleOf = p => {
+  if (!p) return "member";
+  if (["member", "president", "vice_president", "secretary"].includes(p.role)) return p.role;
+  if (p.role === "admin") return p.id === "chadia" ? "vice_president" : "president";
+  if (p.role === "supervisor") return "secretary";
+  return "member";
+};
+const myRole = () => roleOf(me());
+const roleLabel = role => ({
+  member: "Member", president: "President", vice_president: "Vice President",
+  secretary: "Secretary", admin: "President / Vice President", supervisor: "Secretary"
+}[role] || "Member");
+const isAdmin = () => ["president", "vice_president", "secretary"].includes(myRole());
+const isPresident = () => myRole() === "president";
+const isVicePresident = () => myRole() === "vice_president";
+const isSupervisor = () => myRole() === "secretary";
 const canWrite = () => !S.readOnly;
 const activePeople = () => S.people.filter(p => p.status !== "inactive");
 const monthlyOf = p => Number(p && p.monthly) || cfg().monthlyContribution;
@@ -375,8 +387,8 @@ const monthExpected = per => activePeople().filter(p => memberSince(p) <= per).r
 /* ---------- loans ---------- */
 const OPEN_STATES = ["pending_first", "pending_second", "pending_supervisor", "approved", "disbursed"];
 const STATE_LABEL = {
-  pending_first: "Waiting on first admin", pending_second: "Waiting on second admin",
-  pending_supervisor: "Waiting on supervisor", approved: "Approved, not yet paid out",
+  pending_first: "Waiting on President", pending_second: "Waiting on Vice President",
+  pending_supervisor: "Waiting on Secretary", approved: "Approved, not yet paid out",
   disbursed: "Money out", closed: "Repaid in full", rejected: "Rejected"
 };
 const STATE_TAG = { pending_first: "blue", pending_second: "blue", pending_supervisor: "blue", approved: "brass", disbursed: "brass", closed: "green", rejected: "red" };
@@ -488,10 +500,27 @@ function nextApprovalOpenToMe(l) {
   if (!canWrite() || !me()) return false;
   const a = l.approvals || {};
   if (l.personId === me().id) return false;
-  if (l.status === "pending_first") return isAdmin();
-  if (l.status === "pending_second") return isAdmin() && a.first && a.first.byId !== me().id;
+  if (l.status === "pending_first") return isPresident();
+  if (l.status === "pending_second") return isVicePresident() && a.first && a.first.byId !== me().id;
   if (l.status === "pending_supervisor") return isSupervisor() && (!a.first || a.first.byId !== me().id) && (!a.second || a.second.byId !== me().id);
   return false;
+}
+function approvalBlockReason(l) {
+  if (!canWrite()) return "This ledger is read-only.";
+  if (!me()) return "Sign in to approve this request.";
+  if (l.personId === me().id) return "You cannot approve your own loan request.";
+  const a = l.approvals || {};
+  if (l.status === "pending_first" && !isPresident()) return "The first approval must be from the President.";
+  if (l.status === "pending_second") {
+    if (!a.first) return "The first approval is missing; an administrator must review this request.";
+    if (!isVicePresident()) return "The second approval must be from the Vice President.";
+    if (a.first.byId === me().id) return "The Vice President must be a different person from the President who approved first.";
+  }
+  if (l.status === "pending_supervisor") {
+    if (!isSupervisor()) return "The final approval must be from the Secretary.";
+    if ((a.first && a.first.byId === me().id) || (a.second && a.second.byId === me().id)) return "The Secretary must be different from both earlier approvers.";
+  }
+  return "This request is not awaiting your approval.";
 }
 const actionCount = () => (isAdmin() ? S.loans.filter(nextApprovalOpenToMe).length : 0);
 
@@ -524,14 +553,14 @@ async function hashPw(pw) {
    Seed — the contribution book
    ============================================================ */
 const BOOK = [
-  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
+  { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
   { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
   { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
   { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
-  { id: "chadia", name: "Chadia", monthly: 25000, role: "admin", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
+  { id: "chadia", name: "Chadia", monthly: 25000, role: "vice_president", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
   { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", pw: "Ramathan", loan: 0 },
   { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", pw: "Charlotte", loan: 0 },
-  { id: "patrick", name: "Patrick", monthly: 25000, role: "supervisor", email: "patrick@gmail.com", pw: "Patrick", loan: 0 }
+  { id: "patrick", name: "Patrick", monthly: 25000, role: "secretary", email: "patrick@gmail.com", pw: "Patrick", loan: 0 }
 ];
 const BOOK_MONTHS = ["2026-06", "2026-07", "2026-08", "2026-09"];
 
@@ -717,8 +746,7 @@ function render() {
 
 function whoAmI() {
   const p = me(), a = account();
-  const word = { member: "Member", admin: "Admin", supervisor: "Supervisor" };
-  return '<div class="whoami"><b>' + esc(p.name) + '</b><span class="role">' + word[p.role] + '</span>' +
+  return '<div class="whoami"><b>' + esc(p.name) + '</b><span class="role">' + esc(roleLabel(roleOf(p))) + '</span>' +
     '<div class="mini" style="margin-top:3px">' + esc(a ? a.email : "") + '</div>' +
     (S.readOnly ? '<div class="mini">View only</div>' : "") +
     '<div class="railfoot"><button data-act="theme">Theme</button><button data-act="logout">Sign out</button></div></div>';
@@ -826,9 +854,9 @@ function adminDashboard() {
 
       '<section class="panel"><header><div><h3>Approvals</h3><p>Where each loan sits in the chain</p></div></header><div class="body">' +
         donut([
-          { label: "Waiting on first admin", value: S.loans.filter(l => l.status === "pending_first").length, color: "var(--blue)" },
-          { label: "Waiting on second admin", value: S.loans.filter(l => l.status === "pending_second").length, color: "#7FA8CC" },
-          { label: "Waiting on supervisor", value: S.loans.filter(l => l.status === "pending_supervisor").length, color: "var(--brass)" },
+          { label: "Waiting on President", value: S.loans.filter(l => l.status === "pending_first").length, color: "var(--blue)" },
+          { label: "Waiting on Vice President", value: S.loans.filter(l => l.status === "pending_second").length, color: "#7FA8CC" },
+          { label: "Waiting on Secretary", value: S.loans.filter(l => l.status === "pending_supervisor").length, color: "var(--brass)" },
           { label: "Approved and paid out", value: S.loans.filter(l => l.status === "approved" || l.status === "disbursed").length, color: "var(--green)" },
           { label: "Closed or rejected", value: S.loans.filter(l => l.status === "closed" || l.status === "rejected").length, color: "var(--line)" }
         ]) +
@@ -928,7 +956,7 @@ function membersView() {
         (p.status === "inactive" ? ' <span class="tag">Inactive</span>' : "") +
         (me() && p.id === me().id ? ' <span class="tag blue">You</span>' : "") +
         (p.email ? '<div class="mini">' + esc(p.email) + '</div>' : "") + '</td>' +
-        '<td class="mini">' + (p.role === "supervisor" ? "Supervisor" : p.role === "admin" ? "Admin" : "Member") + '</td>' +
+        '<td class="mini">' + esc(roleLabel(roleOf(p))) + '</td>' +
         '<td class="num muted">' + num(req) + '</td><td class="num">' + full + " / " + ops.length + '</td>' +
         '<td class="num">' + money(totalSaved(p.id)) + '</td>' +
         '<td class="num">' + money(maxLoanFor(p.id)) + (open ? '<div class="mini">loan running</div>' : "") + '</td>' +
@@ -1062,8 +1090,8 @@ function chainView(l) {
       '<b>' + signer + '</b>' +
       (got ? '<div class="mini">Signed ' + fmtDate(got.at) + '</div>' : "") + '</div>';
   };
-  return '<div class="chain">' + step("first", "First admin", "pending_first") +
-    step("second", "Second admin", "pending_second") + step("supervisor", "Supervisor", "pending_supervisor") + '</div>';
+  return '<div class="chain">' + step("first", "President", "pending_first") +
+    step("second", "Vice President", "pending_second") + step("supervisor", "Secretary", "pending_supervisor") + '</div>';
 }
 
 function requestedLoansView() {
@@ -1074,7 +1102,7 @@ function requestedLoansView() {
         const p = personById(l.personId) || { name: "Unknown" };
         const approvals = ["first", "second", "supervisor"].map(k => {
           const a = (l.approvals || {})[k];
-          const label = k === "first" ? "First admin" : k === "second" ? "Second admin" : "Supervisor";
+          const label = k === "first" ? "President" : k === "second" ? "Vice President" : "Secretary";
           return '<div class="sigbox" style="margin:2px 0"><div class="mini">' + esc(label) + '</div>' +
             (a ? '<b>' + esc(a.name) + '</b><div class="mini">' + esc(a.title || "") + '</div><div class="mini">' + fmtDate(a.at) + '</div>' : '<div class="mini">Waiting</div>') + '</div>';
         }).join("");
@@ -1082,7 +1110,8 @@ function requestedLoansView() {
           '<div class="mini">Requested ' + fmtDate(l.requestedAt) + '</div></td>' +
           '<td class="num">' + money(l.principal) + '</td>' +
           '<td><span class="tag ' + STATE_TAG[l.status] + '">' + STATE_LABEL[l.status] + '</span></td>' +
-          '<td><div class="stack">' + approvals + '</div></td>' +
+          '<td><div class="stack">' + approvals + '</div>' +
+            (nextApprovalOpenToMe(l) ? "" : '<div class="mini">' + esc(approvalBlockReason(l)) + '</div>') + '</td>' +
           '<td class="num"><div class="rowacts">' + (nextApprovalOpenToMe(l) ? '<button class="btn small primary" data-act="approve" data-id="' + l.id + '">Approve</button>' : '') +
           '<button class="btn small" data-act="loan" data-id="' + l.id + '">View</button></div></td></tr>';
       }).join("") + '</tbody></table></div></section>' : '<div class="panel"><div class="empty"><b>No requested loans</b>Any new application will appear here for admin and supervisor review.</div></div>');
@@ -1140,7 +1169,7 @@ function loanDetail(l) {
     '<dt>Due</dt><dd>' + fmtDate(l.dueDate) + '</dd></dl>' +
     '<div class="sigs">' + ["first", "second", "supervisor"].map(k => {
       const a = (l.approvals || {})[k];
-      const label = k === "first" ? "First admin" : k === "second" ? "Second admin" : "Supervisor";
+      const label = k === "first" ? "President" : k === "second" ? "Vice President" : "Secretary";
       return '<div class="sigbox">' + label + (a ? '<div class="line">' + esc(a.name) + ' — ' + esc(a.title || "") +
         '<div class="mini">Approved ' + fmtDate(a.at) + '</div></div>' : '<div class="line">&nbsp;<div class="mini">Awaiting signature</div></div>') + '</div>';
     }).join("") + '</div></div>' +
@@ -1214,10 +1243,9 @@ function earningsView() {
    ============================================================ */
 function profileView() {
   const p = me(), a = account();
-  const word = { member: "Member", admin: "Admin", supervisor: "Supervisor" };
   return '<div class="pagehead"><div><h2>Profile</h2><p>Your details and how you sign in.</p></div></div>' +
     '<div class="chartgrid">' +
-    '<section class="panel"><header><div><h3>' + esc(p.name) + '</h3><p>' + word[p.role] + ' since ' + fmtPeriod(memberSince(p)) + '</p></div></header><div class="body">' +
+    '<section class="panel"><header><div><h3>' + esc(p.name) + '</h3><p>' + esc(roleLabel(roleOf(p))) + ' since ' + fmtPeriod(memberSince(p)) + '</p></div></header><div class="body">' +
       '<dl class="kv"><dt>Email</dt><dd>' + esc(a ? a.email : "\u2014") + '</dd>' +
       '<dt>Phone</dt><dd>' + esc(p.phone || "\u2014") + '</dd>' +
       '<dt>Monthly share</dt><dd>' + money(monthlyOf(p)) + '</dd>' +
@@ -1234,7 +1262,7 @@ function profileView() {
       '<p>Everyone who can open this ledger.</p></div></header><div class="scroll"><table><thead><tr>' +
       '<th>Member</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
       S.accounts.map(ac => { const pp = personById(ac.personId) || {}; return '<tr><td class="name">' + esc(pp.name || "\u2014") + '</td>' +
-        '<td class="mini">' + esc(ac.email) + '</td><td class="mini">' + (word[pp.role] || "") + '</td>' +
+        '<td class="mini">' + esc(ac.email) + '</td><td class="mini">' + esc(roleLabel(roleOf(pp))) + '</td>' +
         '<td class="num">' + (canWrite() ? '<button class="btn small" data-act="modal" data-m="resetpw" data-id="' + ac.id + '">Reset password</button>' : "") + '</td></tr>';
       }).join("") + '</tbody></table></div></section>' : "");
 }
@@ -1291,12 +1319,12 @@ function memberModal(m) {
       '<div class="inline"><label class="f"><span>Email for signing in</span><input type="text" id="m_email" value="' + esc(p && p.email ? p.email : "") + '"></label>' +
       '<label class="f"><span>Phone</span><input type="text" id="m_phone" value="' + esc(p && p.phone ? p.phone : "") + '" placeholder="Optional"></label></div>' +
       '<div class="inline"><label class="f"><span>Saving since</span><input type="month" id="m_joined" value="' + (p ? memberSince(p) : cfg().cycleStart) + '"></label>' +
-      '<label class="f"><span>Role</span><select id="m_role">' + ["member", "admin", "supervisor"].map(r =>
-        '<option value="' + r + '"' + (p && p.role === r ? " selected" : "") + '>' + (r === "member" ? "Member" : r === "admin" ? "Admin" : "Supervisor") + '</option>').join("") + '</select></label>' +
+      '<label class="f"><span>Role</span><select id="m_role">' + ["member", "president", "vice_president", "secretary"].map(r =>
+        '<option value="' + r + '"' + (p && roleOf(p) === r ? " selected" : "") + '>' + roleLabel(r) + '</option>').join("") + '</select></label>' +
       '<label class="f"><span>Status</span><select id="m_status"><option value="active"' + (!p || p.status !== "inactive" ? " selected" : "") + '>Active</option>' +
         '<option value="inactive"' + (p && p.status === "inactive" ? " selected" : "") + '>Inactive</option></select></label></div>' +
       (p ? "" : '<label class="f"><span>First password</span><input type="text" id="m_pw" placeholder="They can change it later"></label>') +
-      '<p class="hint">A loan needs two different admins plus the supervisor, and nobody may approve their own.</p>',
+      '<p class="hint">A loan needs approvals from the President, a different Vice President, and the Secretary. Nobody may approve their own loan.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button>' +
       '<button class="btn primary" data-act="savemember" data-id="' + (p ? p.id : "") + '">' + (p ? "Save changes" : "Add member") + '</button>'
   };
