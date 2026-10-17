@@ -564,7 +564,7 @@ async function hashPw(pw) {
    Seed — the contribution book
    ============================================================ */
 const BOOK = [
-  { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 5100 },
+  { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
   { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
   { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
   { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
@@ -785,7 +785,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest only paid by Jules (RWF 5,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest only paid by Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -1412,7 +1412,7 @@ function bookCorrectionsPlan() {
     { id: "fee_patrick_2026-10", personId: "patrick", amount: 250, at: "2026-10-16" }
   ];
   const repaymentSpecs = [
-    { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 5100 },
+    { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 8100 },
     { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 }
   ];
   const fees = [], repayments = [];
@@ -1478,7 +1478,7 @@ function bookCorrectionsModal() {
   try {
     plan = bookCorrectionsPlan();
     totals = bookCorrectionsTotals(plan);
-    if (totals.rates !== 500 || totals.interest !== 21900) {
+    if (totals.rates !== 500 || totals.interest !== 24900) {
       problem = "Applying these entries would leave totals at " + money(totals.rates) + " for rate contributions and " +
         money(totals.interest) + " for interest earned. No records will be changed; review existing payments first.";
     }
@@ -1486,7 +1486,7 @@ function bookCorrectionsModal() {
   const updates = plan ? plan.fees.length + plan.repayments.length : 0;
   const body = '<p>Reconcile the contribution book with the existing ledger:</p><ul>' +
     '<li>Chadia rate payment: RWF 250</li><li>Patrick rate payment: RWF 250</li>' +
-    '<li>Jules first-month loan interest only: RWF 5,100</li><li>Candide first-month loan interest only: RWF 16,800</li></ul>' +
+    '<li>Jules first-month loan interest only: RWF 8,100</li><li>Candide first-month loan interest only: RWF 16,800</li></ul>' +
     '<p class="hint">Existing matching payments are updated in place. Missing payments are added. Unrelated records are never changed, and applying this again will not duplicate these entries.</p>' +
     (problem ? '<div class="err">' + esc(problem) + '</div>' :
       '<p class="mini">' + (updates ? updates + ' record(s) will be added or corrected.' : 'These payments are already reconciled.') + '</p>');
@@ -1690,7 +1690,7 @@ async function onAct(act, el) {
       render();
       return;
     }
-    if (totals.rates !== 500 || totals.interest !== 21900) {
+    if (totals.rates !== 500 || totals.interest !== 24900) {
       S.formErr = "The ledger changed since this dialog opened. Review the current payments before applying corrections.";
       render();
       return;
