@@ -43,8 +43,8 @@ earlier instructions). Click **Sign in**, and you should land on a
 members, their savings, and their existing loans. The sample book includes
 October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
 and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
-and Chadia in September, and first-month loan interest payments of RWF 8,100
-from Jules and RWF 16,800 from Candide.
+and Chadia in September, and first-month loan-interest-only payments of
+RWF 5,100 from Jules and RWF 16,800 from Candide.
 From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
 reconcile these known payments in an existing ledger without duplicating
