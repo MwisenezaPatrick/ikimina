@@ -59,9 +59,12 @@ monthly contributions starting on the 16th. Amounts paid above the normal
 contribution cover that penalty first, then accrued loan interest at the loan's
 monthly rate (3% by default) on outstanding principal. Any remaining amount is
 carried forward as an interest credit; it does not count toward savings or
-reduce loan principal. Officers can use **Edit paid rates** to add or remove
-chargeable days manually; each day adjustment also updates the penalty by the
-member's current daily penalty.
+reduce loan principal. Zero chargeable days means zero penalty accrued and zero
+rate contributions credited to the penalty. Cash loan-interest repayments,
+including Jules's RWF 8,100 and Candide's RWF 16,800 payments, are reported
+separately from contribution-based interest credits. Officers can use
+**Edit paid rates** to add or remove chargeable days manually; each day
+adjustment also updates the penalty by the member's current daily penalty.
 Loan requests require approval from the President, Vice President, and
 Secretary in order. An officer may approve a stage assigned to their current
 role; nobody may approve their own loan. Existing accounts with legacy Admin

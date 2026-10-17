@@ -380,13 +380,16 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
   const dailyRate = unpaidContribution * 0.01;
   accrued = Math.max(0, accrued + appliedDayAdjustment * dailyRate);
   lateDays = calculatedLateDays + appliedDayAdjustment;
+  if (lateDays === 0) accrued = 0;
   const feeCredits = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || "") && (!f.at || f.at.slice(0, 10) <= today))
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   const roundedAccrued = Math.round(accrued);
   const roundedFees = Math.round(feeCredits);
   const roundedOverpayments = Math.round(overpaymentCredits);
   const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - roundedFees));
-  const roundedPaid = Math.min(roundedAccrued, roundedFees + roundedOverpayments);
+  const roundedPaid = lateDays > 0
+    ? Math.min(roundedAccrued, roundedFees + roundedOverpayments)
+    : 0;
   return {
     accrued: roundedAccrued,
     paid: roundedPaid,
@@ -498,6 +501,9 @@ const contributionInterestCollected = () => S.people.reduce((sum, p) => {
 const interestCollected = () => S.repayments.reduce((a, r) => a + splitPart(r, "interest"), 0) + contributionInterestCollected();
 const principalRepaid = () => S.loans.reduce((sum, l) => sum + loanPrincipalPaidFromRepayments(l.id), 0);
 function loanInterestPaid(id) { return loanInterestPaidFromRepayments(id) + loanInterestCreditForLoan(id); }
+function loanInterestPaidInCash(pid) {
+  return loansOf(pid).reduce((sum, loan) => sum + loanInterestPaidFromRepayments(loan.id), 0);
+}
 const cashExpenses = () => S.payouts.filter(p => p.type === "cash_expense")
   .reduce((sum, expense) => sum + (Number(expense.total) || 0), 0);
 const distributedEarnings = () => S.payouts.filter(p => p.type !== "cash_expense")
@@ -1125,7 +1131,7 @@ function rateContributionsView() {
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
       '<th class="num">Current daily penalty (1%)</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
-      '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Advance interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
+      '<th class="num">Rate credit remaining</th><th class="num">Loan interest paid (cash)</th><th class="num">Rate interest credited to loans</th><th class="num">Advance contribution interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
         const applied = Object.keys(interestCredits.byLoan).reduce((sum, id) => sum + interestCredits.byLoan[id], 0);
@@ -1137,11 +1143,12 @@ function rateContributionsView() {
         '<td class="num">' + money(rate.paid) + '</td>' +
         '<td class="num">' + (rate.outstanding ? '<span class="dot no">' + money(rate.outstanding) + '</span>' : '<span class="dot ok">' + money(0) + '</span>') + '</td>' +
         '<td class="num">' + money(rate.penaltyCredit) + '</td>' +
+        '<td class="num">' + money(loanInterestPaidInCash(person.id)) + '</td>' +
         '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td>' +
         (editable ? '<td><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">Chargeable days are counted across contribution months, while the 1% penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
+    '<p class="hint">A member with zero chargeable days has no 1% penalty accrued and no rate contributions credited to the penalty. Otherwise, chargeable days are counted across contribution months, while the penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Cash interest repayments are shown separately from contribution-based interest credits.</p>';
 }
 
 function buildReportData(period) {
