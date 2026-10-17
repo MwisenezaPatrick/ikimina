@@ -46,6 +46,9 @@ and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
 and Chadia in September, and first-month loan interest payments of RWF 8,100
 from Jules and RWF 16,800 from Candide.
 From then on the data lives in Supabase, not in the page.
+An admin can use **Apply recorded book payments** on the dashboard to
+reconcile these known payments in an existing ledger without duplicating
+matching records or changing unrelated repayments.
 
 The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
 monthly contributions starting on the 16th. Amounts paid above the normal
