@@ -988,7 +988,11 @@ function loanRow(l) {
       (l.status === "disbursed" && days !== null ? '<div class="mini">' + (days >= 0 ? days + " days left" : (-days) + " days late") + '</div>' : "") + '</td>' +
     '<td class="num"><div class="rowacts">' +
       approvalButton(l, true) +
-      '<span class="btn small">Open</span></div></td></tr>';
+      '<span class="btn small">Open</span>' +
+      (isAdmin() && canWrite() && (l.status || "").startsWith("pending")
+        ? '<button class="btn small" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>'
+        : "") +
+      '</div></td></tr>';
 }
 
 /* ============================================================
