@@ -59,10 +59,11 @@ contribution's unpaid balance starting on the 16th. A payment on or before the
 15th has zero chargeable days; a late payment accrues through its payment date,
 and an unpaid balance continues accruing through today. The daily penalty
 therefore depends on the unpaid amount: RWF 250 for RWF 25,000 unpaid and RWF
-500 for RWF 50,000 unpaid. Rate contributions received shows recorded rate
-payments and eligible contribution overpayments even when no penalty is due;
-penalty outstanding never falls below zero, and excess receipts remain as rate
-credit. Amounts paid above the normal contribution cover the
+500 for RWF 50,000 unpaid. Rate contributions received shows recorded rate-fee
+payments only; eligible contribution overpayments are applied as credits
+separately so they do not inflate that received total. Penalty outstanding
+never falls below zero, and excess credits remain available after the penalty
+is covered. Amounts paid above the normal contribution cover the
 penalty first, then accrued loan interest at the loan's monthly rate (3% by
 default) on outstanding principal. Any remaining amount is carried forward as
 an interest credit; it does not count toward savings or reduce loan principal.
