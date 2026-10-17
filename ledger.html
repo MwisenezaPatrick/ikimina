@@ -770,7 +770,9 @@ function navFor(role) {
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
     { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
     { k: "requested", label: "Requested Loan" }, { k: "reports", label: "Reports" },
-    { k: "earnings", label: "Earnings" }, { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
+    { k: "earnings", label: "Earnings" },
+    ...(role === "president" ? [{ k: "expenses", label: "Expenses" }] : []),
+    { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
   ];
 }
 
@@ -824,6 +826,7 @@ function page() {
     case "requested": return requestedLoansView();
     case "reports": return reportsView();
     case "earnings": return earningsView();
+    case "expenses": return expensesView();
     case "profile": return profileView();
     case "settings": return settingsView();
     default: return isAdmin() ? adminDashboard() : memberDashboard();
@@ -868,7 +871,7 @@ function vaultHero() {
       '<div><b>' + num(groupContributions()) + '</b><small>Saved by members</small></div>' +
       '<div><b>' + num(feesTotal() + rateSavingsUnallocated()) + '</b><small>Rate contributions</small></div>' +
       '<div><b>' + num(interestCollected()) + '</b><small>Interest earned</small></div>' +
-      '<div><b>' + num(cashExpenses()) + '</b><small>Cash expenses</small></div>' +
+      '<div><b>' + num(cashExpenses()) + '</b><small>Transaction costs</small></div>' +
     '</div></div>' +
     '<div class="bar"><i class="out" style="width:' + pctOut + '%"></i><i class="avail" style="width:' + (100 - pctOut) + '%"></i></div>' +
     '<div class="barkey"><span><i style="background:var(--brass)"></i>' + money(out) + ' out on loan</span>' +
@@ -893,7 +896,7 @@ function adminDashboard() {
 
   return '<div class="pagehead"><div><h2>Dashboard</h2><p>Where the group\u2019s money is sitting, and what needs a decision.</p></div>' +
     (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="book-corrections">Apply recorded book payments</button> ' : "") +
-    (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="cash-expense">Record cash expense</button> ' : "") +
+    (isPresident() && canWrite() ? '<button class="btn" data-act="modal" data-m="cash-expense">Record transaction cost</button> ' : "") +
     (canWrite() ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     vaultHero() +
     '<div class="grid2" style="margin-bottom:18px">' +
@@ -996,10 +999,7 @@ function loanRow(l) {
   const p = personById(l.personId), over = isOverdue(l);
   const days = l.dueDate ? daysFromToday(l.dueDate) : null;
   return '<tr data-act="loan" data-id="' + l.id + '" style="cursor:pointer">' +
-    '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div>' +
-      (isAdmin() && canWrite() && (l.status || "").startsWith("pending")
-        ? '<div class="rowacts" style="justify-content:flex-start;margin-top:6px"><button class="btn small danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button></div>'
-        : "") + '</td>' +
+    '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div></td>' +
     '<td class="num">' + money(l.principal) + '<div class="mini">repay ' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</div></td>' +
     '<td><span class="tag ' + (over ? "red" : STATE_TAG[l.status] || "blue") + '">' + (over ? "Overdue" : STATE_LABEL[l.status] || l.status || "Unknown") + '</span>' +
       ((l.status || "").startsWith("pending") && !nextApprovalOpenToMe(l)
@@ -1007,8 +1007,14 @@ function loanRow(l) {
       (l.status === "disbursed" && days !== null ? '<div class="mini">' + (days >= 0 ? days + " days left" : (-days) + " days late") + '</div>' : "") + '</td>' +
     '<td class="num"><div class="rowacts">' +
       approvalButton(l, true) +
+      (canDeleteLoanRequest(l) ? '<button class="btn small danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
       '<span class="btn small">Open</span>' +
       '</div></td></tr>';
+}
+
+function canDeleteLoanRequest(loan) {
+  return isAdmin() && canWrite() && (loan.status || "").startsWith("pending") &&
+    !S.repayments.some(repayment => repayment.loanId === loan.id);
 }
 
 /* ============================================================
@@ -1233,7 +1239,7 @@ function reportsView() {
       '<div class="stat"><b>' + money(t.rateOutstanding) + '</b><small>Rate outstanding</small></div>' +
       '<div class="stat"><b>' + money(t.loansOutstanding) + '</b><small>Outstanding loan balances</small></div>' +
       '<div class="stat"><b>' + money(t.interestCollected) + '</b><small>Interest collected</small></div>' +
-      '<div class="stat"><b>' + money(t.cashExpenses) + '</b><small>Cash expenses, all time</small></div>' +
+      '<div class="stat"><b>' + money(t.cashExpenses) + '</b><small>Transaction costs, all time</small></div>' +
       '<div class="stat"><b>' + money(t.cashAvailable) + '</b><small>Cash available</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>Member contributions and balances</h3><p>Chargeable days are calculated through today.</p></div></header>' +
@@ -1280,7 +1286,7 @@ function requestedLoansView() {
             (nextApprovalOpenToMe(l) ? "" : '<div class="mini">' + esc(approvalBlockReason(l)) + '</div>') + '</td>' +
           '<td class="num"><div class="rowacts">' + approvalButton(l, true) +
           '<button class="btn small" data-act="loan" data-id="' + esc(l.id) + '">View</button>' +
-          (isAdmin() && canWrite() ? '<button class="btn small" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
+          (canDeleteLoanRequest(l) ? '<button class="btn small danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
           '</div></td></tr>';
       }).join("") + '</tbody></table></div></section>' : '<div class="panel"><div class="empty"><b>No requested loans</b>Any new application will appear here for admin and supervisor review.</div></div>');
 }
@@ -1380,6 +1386,15 @@ function shareOut(pool, people) {
   return out;
 }
 
+function cashExpenseHistory() {
+  const expenses = S.payouts.filter(p => p.type === "cash_expense").slice().sort((a, b) => a.at < b.at ? 1 : -1);
+  return '<section class="panel"><header><div><h3>Transaction costs</h3><p>Withdrawal, transfer, and other transaction charges.</p></div></header>' +
+    (expenses.length ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Description</th><th>Recorded by</th><th class="num">Amount</th></tr></thead><tbody>' +
+      expenses.map(expense => '<tr><td>' + fmtDate(expense.at) + '</td><td>' + esc(expense.description) + '</td><td>' + esc(expense.by) +
+        '</td><td class="num">' + money(expense.total) + '</td></tr>').join("") + '</tbody></table></div>'
+      : '<div class="empty">No transaction costs recorded.</div>') + '</section>';
+}
+
 function earningsView() {
   const c = cfg(), pool = earningsPool(), people = activePeople();
   const shares = shareOut(pool, people);
@@ -1389,7 +1404,7 @@ function earningsView() {
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(interestCollected()) + '</b><small>Interest collected, all time</small></div>' +
       '<div class="stat"><b>' + money(distributedEarnings()) + '</b><small>Already shared out</small></div>' +
-      '<div class="stat"><b>' + money(cashExpenses()) + '</b><small>Cash expenses, all time</small></div>' +
+      '<div class="stat"><b>' + money(cashExpenses()) + '</b><small>Transaction costs, all time</small></div>' +
       '<div class="stat"><b>' + money(pool) + '</b><small>Waiting to be shared</small></div>' +
       '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
     '</div>' +
@@ -1411,13 +1426,16 @@ function earningsView() {
         '<td class="mini">' + (p.method === "equal" ? "Equal shares" : "By savings") + '</td><td class="num">' + money(p.total) + '</td>' +
         '<td class="num muted">' + (p.shares ? p.shares.length : 0) + '</td></tr>').join("") + '</tbody></table></div>'
       : '<div class="empty">Nothing shared out yet. Interest keeps building in the box.</div>') + '</section>' +
-    '<section class="panel"><header><div><h3>Cash expenses</h3><p>Withdrawal and transfer charges reduce cash in the group box and available to lend.</p></div>' +
-      (isAdmin() && canWrite() ? '<button class="btn small" data-act="modal" data-m="cash-expense">Record cash expense</button>' : "") + '</header>' +
-    (S.payouts.some(p => p.type === "cash_expense") ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Description</th><th>Recorded by</th><th class="num">Amount</th></tr></thead><tbody>' +
-      S.payouts.filter(p => p.type === "cash_expense").slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(expense =>
-        '<tr><td>' + fmtDate(expense.at) + '</td><td>' + esc(expense.description) + '</td><td>' + esc(expense.by) +
-        '</td><td class="num">' + money(expense.total) + '</td></tr>').join("") + '</tbody></table></div>'
-      : '<div class="empty">No cash expenses recorded.</div>') + '</section>';
+    cashExpenseHistory();
+}
+
+function expensesView() {
+  if (!isPresident()) return '<div class="panel"><div class="empty"><b>Expenses are for the President</b>Sign in with the President account to record transaction costs.</div></div>';
+  return '<div class="pagehead"><div><h2>Expenses</h2><p>Record transaction costs such as bank withdrawal and money transfer charges.</p></div>' +
+    (canWrite() ? '<button class="btn primary" data-act="modal" data-m="cash-expense">Record transaction cost</button>' : "") + '</div>' +
+    '<div class="grid2" style="margin-bottom:18px"><div class="stat"><b>' + money(cashExpenses()) + '</b><small>Transaction costs, all time</small></div>' +
+    '<div class="stat"><b>' + S.payouts.filter(p => p.type === "cash_expense").length + '</b><small>Transactions recorded</small></div></div>' +
+    cashExpenseHistory();
 }
 
 /* ============================================================
@@ -1805,8 +1823,7 @@ function loanModal(m) {
   const l = S.loans.find(x => x.id === m.id);
   if (!l) return { title: "Loan", body: '<p class="mini">This loan is no longer here.</p>' };
   return { title: esc(l.number), body: loanDetail(l),
-    foot: ((isAdmin() && canWrite() && (l.status || "").startsWith("pending") &&
-      !S.repayments.some(r => r.loanId === l.id))
+    foot: (canDeleteLoanRequest(l)
       ? '<button class="btn danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
       '<button class="btn" data-act="download" data-id="' + esc(l.id) + '">Download filled PDF agreement</button><button class="btn" data-act="close">Close</button>' };
 }
@@ -1854,15 +1871,15 @@ function cashExpenseModal() {
   const amountText = modal.amount == null ? "" : String(modal.amount);
   const amount = Number(amountText) || 0;
   return {
-    title: "Record a cash expense",
+    title: "Record a transaction cost",
     body: '<div class="calcout"><div><span>Main balance</span><b>' + money(boxTotal()) + '</b></div>' +
       '<div><span>Available to lend</span><b>' + money(cashAvailable()) + '</b></div>' +
       '<div class="total"><span>Main balance after expense</span><b id="expense_balance_after">' + money(boxTotal() - amount) + '</b></div></div>' +
-      '<label class="f"><span>Expense description</span><input type="text" id="expense_description" data-act="cash-expense-field" data-field="description" maxlength="200" value="' + esc(modal.description || "") + '" placeholder="Bank withdrawal or money transfer charge"></label>' +
+      '<label class="f"><span>Transaction description</span><input type="text" id="expense_description" data-act="cash-expense-field" data-field="description" maxlength="200" value="' + esc(modal.description || "") + '" placeholder="Bank withdrawal, transfer charge, or other transaction cost"></label>' +
       '<div class="inline"><label class="f"><span>Amount paid (RWF)</span><input type="number" id="expense_amount" data-act="cash-expense-amount" min="1" step="1" value="' + esc(amountText) + '" placeholder="0"></label>' +
       '<label class="f"><span>Date paid</span><input type="date" id="expense_date" data-act="cash-expense-field" data-field="at" value="' + esc(modal.at || todayISO()) + '"></label></div>' +
-      '<p class="hint">This records an actual cash expense, reduces the main balance and available-to-lend amount, and is included in group reports.</p>',
-    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-cash-expense">Save expense</button>'
+      '<p class="hint">This records an actual transaction cost, reduces the main balance and available-to-lend amount, and is included in group reports.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-cash-expense">Save transaction cost</button>'
   };
 }
 
@@ -2205,7 +2222,7 @@ async function onAct(act, el) {
     S.modal = null; toast("Earnings shared out"); return;
   }
   if (act === "save-cash-expense") {
-    if (!isAdmin() || !canWrite()) { toast("Only an officer can record a cash expense."); return; }
+    if (!isPresident() || !canWrite()) { toast("Only the President can record a transaction cost."); return; }
     const description = val("expense_description"), amountText = val("expense_amount");
     const amount = Number(amountText), at = val("expense_date");
     if (S.modal) Object.assign(S.modal, { description, amount: amountText, at });
@@ -2222,8 +2239,8 @@ async function onAct(act, el) {
     const expense = { id, type: "cash_expense", description, total: amount, at, by: me().name };
     await put("payouts/" + id, expense);
     S.payouts.push(expense);
-    await logEvent("expense", "Recorded cash expense: " + description + " · " + money(amount));
-    S.modal = null; toast("Cash expense recorded"); return;
+    await logEvent("expense", "Recorded transaction cost: " + description + " · " + money(amount));
+    S.modal = null; toast("Transaction cost recorded"); return;
   }
 
   /* ---- settings ---- */
@@ -2282,7 +2299,7 @@ function exportReportExcel(period) {
     '<tr><td>Rate outstanding</td><td>' + t.rateOutstanding + '</td></tr>' +
     '<tr><td>Outstanding loan balances</td><td>' + t.loansOutstanding + '</td></tr>' +
     '<tr><td>Interest collected</td><td>' + t.interestCollected + '</td></tr>' +
-    '<tr><td>Cash expenses (all time)</td><td>' + t.cashExpenses + '</td></tr>' +
+    '<tr><td>Transaction costs (all time)</td><td>' + t.cashExpenses + '</td></tr>' +
     '<tr><td>Cash available</td><td>' + t.cashAvailable + '</td></tr></tbody></table>' +
     '<h2>Member balances</h2><table><thead><tr><th>Member</th><th>Monthly due</th><th>Contribution</th>' +
     '<th>Savings to date</th><th>Chargeable days</th><th>Rate received</th><th>Rate outstanding</th><th>Loan balance</th>' +

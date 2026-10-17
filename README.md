@@ -82,10 +82,11 @@ President, Vice President, and Secretary accounts also have a **Reports** page.
 Choose a contribution month to review the group summary, member balances,
 chargeable days, and loans. Use **Save as PDF** to print or save the report as
 PDF, or **Download Excel** to export an Excel-compatible workbook file.
-Officers can record dated, described bank withdrawal or transfer charges using
-**Record cash expense** on the dashboard. Expenses reduce the main balance,
-cash available to lend, and unshared earnings, and are listed on the Earnings
-page and included in group reports.
+The President can record dated transaction costs, such as bank withdrawal or
+transfer charges, from the **Expenses** sidebar page. Costs reduce the main
+balance, cash available to lend, and unshared earnings, and are included in
+group reports. Officers can delete pending loan applications without
+repayments from the loan row's **Delete request** action.
 
 ## 4. Put it online for free
 
