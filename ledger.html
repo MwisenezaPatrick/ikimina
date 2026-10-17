@@ -785,7 +785,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month interest paid by Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest only paid by Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -1189,6 +1189,8 @@ function loanDetail(l) {
       '<span class="tag ' + (over ? "red" : STATE_TAG[l.status]) + '">' + (over ? "Overdue" : STATE_LABEL[l.status]) + '</span>' +
       (l.status === "disbursed" && days !== null ? '<span class="mini">' + (days >= 0 ? days + " days left to repay" : (-days) + " days past due") + '</span>' : "") + '</div>' +
     chainView(l) +
+    ((l.status || "").startsWith("pending") && !nextApprovalOpenToMe(l)
+      ? '<p class="hint" style="margin-top:12px">' + esc(approvalBlockReason(l)) + '</p>' : "") +
     (l.fromBook ? '<p class="hint" style="margin-top:12px">Carried over from the paper contribution book.</p>' : "") +
     (l.status === "rejected" && l.rejection ? '<div class="err" style="margin-top:12px">Rejected by ' + esc(l.rejection.name) + ': ' + esc(l.rejection.reason) + '</div>' : "") +
     (l.disbursedAt ? '<div class="calcout" style="margin-top:14px"><div><span>Repaid so far</span><b>' + money(repaid) + '</b></div>' +
@@ -1387,17 +1389,20 @@ function ratePaymentsModal(m) {
   if (!p) return { title: "Rate payments", body: '<p class="mini">This member is no longer available.</p>' };
   const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""))
     .slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  const receivedTotal = fees.reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
   const paymentFields = fees.map(f =>
-    '<div class="inline"><label class="f"><span>Paid amount on ' + fmtDate(f.at) + '</span><input type="number" min="0" step="1" id="rate_amount_' + esc(f.id) + '" value="' + (Number(f.amount) || 0) + '"></label>' +
+    '<div class="inline"><label class="f"><span>Rate contributions received</span><input type="number" min="0" step="1" id="rate_amount_' + esc(f.id) + '" value="' + (Number(f.amount) || 0) + '"></label>' +
     '<label class="f"><span>Payment date</span><input type="date" id="rate_date_' + esc(f.id) + '" value="' + esc((f.at || todayISO()).slice(0, 10)) + '"></label></div>'
   ).join("");
   return {
     title: "Edit rate payments for " + esc(p.name),
-    body: (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
+    body: '<div class="inline"><label class="f"><span>Chargeable days (calculated)</span><input type="number" value="' + num(rateDetails(p).lateDays) + '" readonly></label>' +
+      '<label class="f"><span>Total rate contributions received</span><input type="number" value="' + num(receivedTotal) + '" readonly></label></div>' +
+      (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
       '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
       '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
       '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
-      '<p class="hint">Editing updates the recorded rate amount and date. New payments are added separately.</p>',
+      '<p class="hint">Edit each received amount or payment date to correct the record. Chargeable days are calculated from contribution and payment dates and update after saving.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
 }
@@ -1481,7 +1486,7 @@ function bookCorrectionsModal() {
   const updates = plan ? plan.fees.length + plan.repayments.length : 0;
   const body = '<p>Reconcile the contribution book with the existing ledger:</p><ul>' +
     '<li>Chadia rate payment: RWF 250</li><li>Patrick rate payment: RWF 250</li>' +
-    '<li>Jules first-month loan interest: RWF 8,100</li><li>Candide first-month loan interest: RWF 16,800</li></ul>' +
+    '<li>Jules first-month loan interest only: RWF 8,100</li><li>Candide first-month loan interest only: RWF 16,800</li></ul>' +
     '<p class="hint">Existing matching payments are updated in place. Missing payments are added. Unrelated records are never changed, and applying this again will not duplicate these entries.</p>' +
     (problem ? '<div class="err">' + esc(problem) + '</div>' :
       '<p class="mini">' + (updates ? updates + ' record(s) will be added or corrected.' : 'These payments are already reconciled.') + '</p>');
