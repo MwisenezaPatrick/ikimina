@@ -389,7 +389,7 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
   const roundedFees = Math.round(feeCredits);
   const roundedOverpayments = Math.round(overpaymentCredits);
   const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - roundedFees));
-  const roundedPaid = roundedFees + roundedOverpayments;
+  const roundedPaid = roundedFees;
   const manualAdjustment = p.rateManualAdjustment || null;
   const hasManualAccrued = manualAdjustment && Number.isInteger(Number(manualAdjustment.accrued)) &&
     Number(manualAdjustment.accrued) >= 0;
@@ -397,11 +397,12 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     Number(manualAdjustment.paid) >= 0;
   const displayedAccrued = hasManualAccrued ? Number(manualAdjustment.accrued) : roundedAccrued;
   const displayedPaid = hasManualPaid ? Number(manualAdjustment.paid) : roundedPaid;
+  const creditedTowardPenalty = hasManualPaid ? displayedPaid : roundedFees + roundedOverpayments;
   return {
     accrued: displayedAccrued,
     paid: displayedPaid,
-    outstanding: Math.max(0, displayedAccrued - displayedPaid),
-    penaltyCredit: Math.max(0, displayedPaid - displayedAccrued),
+    outstanding: Math.max(0, displayedAccrued - creditedTowardPenalty),
+    penaltyCredit: Math.max(0, creditedTowardPenalty - displayedAccrued),
     loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
     manualAdjustment: !!(hasManualAccrued || hasManualPaid),
     unpaidContribution: Math.round(unpaidContribution),
@@ -1165,7 +1166,7 @@ function rateContributionsView() {
           '<button class="btn small" data-act="modal" data-m="rate-adjustment" data-id="' + esc(person.id) + '">Manual adjustment</button></div></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows actual rate payments and eligible contribution overpayments; penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
+    '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows recorded rate-fee payments; contribution overpayments are applied as credits separately, so they can reduce penalty outstanding without inflating the received total. Penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
 }
 
 function buildReportData(period) {
@@ -1614,7 +1615,7 @@ function ratePaymentsModal(m) {
       '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
       '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
       '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
-      '<p class="hint">Changing chargeable days recalculates the penalty and the rate contributions credited against it. Each added or removed day changes the accrued penalty by ' +
+      '<p class="hint">Changing chargeable days recalculates the penalty. Recorded rate-fee payments and eligible contribution overpayments are credited against it, but only recorded rate-fee payments count as rate contributions received. Each added or removed day changes the accrued penalty by ' +
       money(rate.dailyRate) + '. Save to apply the adjustment.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
