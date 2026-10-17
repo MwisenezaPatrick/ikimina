@@ -45,10 +45,14 @@ October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
 and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
 and Chadia in September, and first-month loan-interest-only payments of
 RWF 8,100 from Jules and RWF 16,800 from Candide.
+On October 17, this means 0 chargeable days for members paid by the 15th,
+2 for Eric and Charlotte, and 1 for Patrick.
 From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
-reconcile these known payments in an existing ledger without duplicating
-matching records or changing unrelated repayments.
+reconcile these known October contribution dates, rate payments, and
+interest-only repayments in an existing ledger. Matching records are updated
+without duplicating them; conflicting October contribution records are flagged
+for review instead of overwritten.
 
 The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
 monthly contributions starting on the 16th. Amounts paid above the normal
@@ -60,6 +64,12 @@ Loan requests require approval from the President, a different Vice President,
 and the Secretary. Existing accounts with legacy Admin and Supervisor roles
 continue to work; Jules maps to President, Chadia to Vice President, and
 Supervisor accounts to Secretary.
+A President can approve only a request waiting on the President and cannot
+approve their own loan. Pending loan rows show why approval is unavailable.
+President, Vice President, and Secretary accounts also have a **Reports** page.
+Choose a contribution month to review the group summary, member balances,
+chargeable days, and loans. Use **Save as PDF** to print or save the report as
+PDF, or **Download Excel** to export an Excel-compatible workbook file.
 
 ## 4. Put it online for free
 
