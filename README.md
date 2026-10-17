@@ -54,18 +54,25 @@ interest-only repayments in an existing ledger. Matching records are updated
 without duplicating them; conflicting October contribution records are flagged
 for review instead of overwritten.
 
-The **Rate contributions** page calculates a simple 1% daily penalty on unpaid
-monthly contributions starting on the 16th. Amounts paid above the normal
-contribution cover that penalty first, then accrued loan interest at the loan's
-monthly rate (3% by default) on outstanding principal. Any remaining amount is
-carried forward as an interest credit; it does not count toward savings or
-reduce loan principal. Zero chargeable days means zero penalty accrued and zero
-rate contributions credited to the penalty. Loan interest credited from
+The **Rate contributions** page adds a fixed RWF 250 penalty per member for
+each chargeable day starting on the 16th, regardless of the member's normal
+contribution amount. A payment on or before the 15th has zero chargeable days;
+a late payment accrues through its payment date, while an unpaid balance
+continues accruing through today. Thus zero days means zero penalty, one day
+means RWF 250, and two days means RWF 500. Rate contributions received are
+credited toward the penalty, up to the amount owed, and show zero when there
+are no chargeable days. Amounts paid above the normal contribution cover the
+penalty first, then accrued loan interest at the loan's monthly rate (3% by
+default) on outstanding principal. Any remaining amount is carried forward as
+an interest credit; it does not count toward savings or reduce loan principal.
+Loan interest credited from
 repayments, including Jules's RWF 8,100 and Candide's RWF 16,800, is reported
 separately from rate-based loan interest credits and advance contribution
 interest credit. Officers can use
 **Edit paid rates** to add or remove chargeable days manually; each day
-adjustment also updates the penalty by the member's current daily penalty.
+adjustment changes accrued penalty by RWF 250. Officers can also use **Manual
+adjustment** to override a member's accrued penalty and rate contributions
+received totals; clearing that adjustment restores automatic calculations.
 Loan requests require approval from the President, Vice President, and
 Secretary in order. An officer may approve a stage assigned to their current
 role; nobody may approve their own loan. Existing accounts with legacy Admin

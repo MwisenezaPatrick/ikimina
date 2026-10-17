@@ -349,13 +349,15 @@ function daysBetween(from, to, inclusive) {
 }
 function rateDetails(p, asOf, dayAdjustmentOverride) {
   const today = asOf || todayISO(), req = monthlyOf(p);
-  let accrued = 0, unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
+  let unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
   for (const per of openPeriods(p)) {
     const rec = S.savings.find(s => s.personId === p.id && s.period === per);
-    const amount = rec ? Math.max(0, Number(rec.amount) || 0) : 0;
+    const recordedDate = rec && rec.recordedAt ? rec.recordedAt.slice(0, 10) : null;
+    const amount = rec && (!recordedDate || recordedDate <= today)
+      ? Math.max(0, Number(rec.amount) || 0)
+      : 0;
     const unpaid = Math.max(0, req - amount);
     unpaidContribution += unpaid;
-    const recordedDate = rec && rec.recordedAt ? rec.recordedAt.slice(0, 10) : null;
     if (!recordedDate || recordedDate <= today) overpaymentCredits += Math.max(0, amount - req);
 
     const chargeStart = per + "-16";
@@ -369,7 +371,6 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     const remainingStart = paymentDate && paymentDate >= chargeStart
       ? addDays(paymentDate, 1) : chargeStart;
     const daysUnpaid = unpaid > 0 ? daysBetween(remainingStart, today, true) : 0;
-    accrued += (req * daysBeforePayment + unpaid * daysUnpaid) * 0.01;
     lateDays += daysBeforePayment + daysUnpaid;
   }
   const calculatedLateDays = lateDays;
@@ -377,10 +378,9 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     ? Math.round(Number(p.chargeableDaysAdjustment) || 0)
     : Math.round(Number(dayAdjustmentOverride) || 0);
   const appliedDayAdjustment = Math.max(-calculatedLateDays, requestedDayAdjustment);
-  const dailyRate = unpaidContribution * 0.01;
-  accrued = Math.max(0, accrued + appliedDayAdjustment * dailyRate);
   lateDays = calculatedLateDays + appliedDayAdjustment;
-  if (lateDays === 0) accrued = 0;
+  const dailyRate = 250;
+  const accrued = lateDays * dailyRate;
   const feeCredits = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || "") && (!f.at || f.at.slice(0, 10) <= today))
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   const roundedAccrued = Math.round(accrued);
@@ -1133,7 +1133,7 @@ function rateContributionsView() {
   const outstanding = rows.reduce((sum, row) => sum + row.rate.outstanding, 0);
   const penaltyCredit = rows.reduce((sum, row) => sum + row.rate.penaltyCredit, 0);
   const editable = isAdmin() && canWrite();
-  return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Late contributions incur a simple 1% daily rate starting on the 16th of each month.</p></div>' +
+  return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Each chargeable day from the 16th incurs a fixed RWF 250 penalty per member.</p></div>' +
     (editable ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(accrued) + '</b><small>Rate accrued</small></div>' +
@@ -1144,7 +1144,7 @@ function rateContributionsView() {
     '<section class="panel"><header><div><h3>Member rate balances</h3>' +
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
-      '<th class="num">Current daily penalty (1%)</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Penalty per chargeable day</th><th class="num">Penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
       '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Rate interest credited to loans</th><th class="num">Advance contribution interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
@@ -1164,7 +1164,7 @@ function rateContributionsView() {
           '<button class="btn small" data-act="modal" data-m="rate-adjustment" data-id="' + esc(person.id) + '">Manual adjustment</button></div></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">Under automatic calculations, a member with zero chargeable days has no 1% penalty accrued and no rate contributions credited to the penalty; an officer can override these displayed totals using Manual adjustment. Otherwise, chargeable days are counted across contribution months, while the penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
+    '<p class="hint">The penalty is RWF 250 per chargeable day for every member: zero days means zero accrued, one day means RWF 250, and two days means RWF 500. Days start on the 16th and stop when the contribution is paid; unpaid contributions continue accruing days through today. Rate contributions received are credited against the accrued penalty, up to the penalty owed, and are zero when there are no chargeable days. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
 }
 
 function buildReportData(period) {
@@ -1605,7 +1605,7 @@ function ratePaymentsModal(m) {
       '<button class="btn" data-act="rate-day-adjust" data-delta="1">Add 1 day</button>' +
       '<span class="mini">Manual adjustment: ' + (daysAdjustment > 0 ? '+' : '') + num(daysAdjustment) +
       ' day(s)</span></div>' +
-      '<div class="calcout"><div><span>1% penalty accrued</span><b>' + money(previewRate.accrued) + '</b></div>' +
+      '<div class="calcout"><div><span>Penalty accrued</span><b>' + money(previewRate.accrued) + '</b></div>' +
       '<div><span>Rate contributions received</span><b>' + money(previewRate.paid) + '</b></div>' +
       '<div><span>Penalty outstanding</span><b>' + money(previewRate.outstanding) + '</b></div></div>' +
       '<label class="f"><span>Total rate contributions received</span><input type="number" value="' + num(receivedTotal) + '" readonly></label>' +
@@ -1613,7 +1613,7 @@ function ratePaymentsModal(m) {
       '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
       '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
       '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
-      '<p class="hint">Changing chargeable days recalculates the 1% penalty and the rate contributions credited against it. Each added or removed day changes the accrued penalty by the current daily penalty of ' +
+      '<p class="hint">Changing chargeable days recalculates the penalty and the rate contributions credited against it. Each added or removed day changes the accrued penalty by ' +
       money(rate.dailyRate) + '. Save to apply the adjustment.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
@@ -1626,7 +1626,7 @@ function rateAdjustmentModal(m) {
     title: "Manual rate adjustment for " + esc(p.name),
     body: '<div class="calcout"><div><span>Calculated chargeable days</span><b>' + num(rate.lateDays) + '</b></div>' +
       '<div><span>Current penalty outstanding</span><b>' + money(rate.outstanding) + '</b></div></div>' +
-      '<div class="inline"><label class="f"><span>1% penalty accrued (RWF)</span><input type="number" min="0" step="1" id="manual_rate_accrued" value="' + rate.accrued + '"></label>' +
+      '<div class="inline"><label class="f"><span>Penalty accrued (RWF)</span><input type="number" min="0" step="1" id="manual_rate_accrued" value="' + rate.accrued + '"></label>' +
       '<label class="f"><span>Rate contributions received (RWF)</span><input type="number" min="0" step="1" id="manual_rate_paid" value="' + rate.paid + '"></label></div>' +
       '<p class="hint">These amounts replace the calculated display totals and determine penalty outstanding. Chargeable days and cash records are unchanged. Clear the adjustment to return to automatic calculations.</p>',
     foot: (rate.manualAdjustment ? '<button class="btn danger" data-act="clear-rate-adjustment" data-id="' + esc(p.id) + '">Clear adjustment</button>' : "") +
@@ -1957,7 +1957,7 @@ async function onAct(act, el) {
     await put("people/" + p.id, updatedPerson);
     S.people = S.people.map(person => person.id === p.id ? updatedPerson : person);
     await logEvent("rate", "Manually adjusted rate balances for " + p.name +
-      ": 1% penalty accrued " + money(accrued) + ", rate contributions received " + money(paid));
+      ": penalty accrued " + money(accrued) + ", rate contributions received " + money(paid));
     S.modal = null; toast("Manual rate adjustment saved"); return;
   }
   if (act === "report-excel") { exportReportExcel(S.reportPeriod || S.period || thisPeriod()); return; }
