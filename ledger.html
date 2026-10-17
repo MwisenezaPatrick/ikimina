@@ -347,7 +347,7 @@ function daysBetween(from, to, inclusive) {
   const start = new Date(from + "T00:00:00Z"), end = new Date(to + "T00:00:00Z");
   return end < start ? 0 : Math.floor((end - start) / 86400000) + (inclusive ? 1 : 0);
 }
-function rateDetails(p, asOf) {
+function rateDetails(p, asOf, dayAdjustmentOverride) {
   const today = asOf || todayISO(), req = monthlyOf(p);
   let accrued = 0, unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
   for (const per of openPeriods(p)) {
@@ -373,7 +373,9 @@ function rateDetails(p, asOf) {
     lateDays += daysBeforePayment + daysUnpaid;
   }
   const calculatedLateDays = lateDays;
-  const requestedDayAdjustment = Math.round(Number(p.chargeableDaysAdjustment) || 0);
+  const requestedDayAdjustment = dayAdjustmentOverride == null
+    ? Math.round(Number(p.chargeableDaysAdjustment) || 0)
+    : Math.round(Number(dayAdjustmentOverride) || 0);
   const appliedDayAdjustment = Math.max(-calculatedLateDays, requestedDayAdjustment);
   const dailyRate = unpaidContribution * 0.01;
   accrued = Math.max(0, accrued + appliedDayAdjustment * dailyRate);
@@ -1536,6 +1538,7 @@ function ratePaymentsModal(m) {
     ? Math.max(-rate.calculatedLateDays, m.daysAdjustment)
     : rate.chargeableDaysAdjustment;
   const adjustedDays = Math.max(0, rate.calculatedLateDays + daysAdjustment);
+  const previewRate = rateDetails(p, undefined, daysAdjustment);
   const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""))
     .slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
   const receivedTotal = fees.reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
@@ -1550,12 +1553,15 @@ function ratePaymentsModal(m) {
       '<button class="btn" data-act="rate-day-adjust" data-delta="1">Add 1 day</button>' +
       '<span class="mini">Manual adjustment: ' + (daysAdjustment > 0 ? '+' : '') + num(daysAdjustment) +
       ' day(s)</span></div>' +
+      '<div class="calcout"><div><span>1% penalty accrued</span><b>' + money(previewRate.accrued) + '</b></div>' +
+      '<div><span>Rate contributions received</span><b>' + money(previewRate.paid) + '</b></div>' +
+      '<div><span>Penalty outstanding</span><b>' + money(previewRate.outstanding) + '</b></div></div>' +
       '<label class="f"><span>Total rate contributions received</span><input type="number" value="' + num(receivedTotal) + '" readonly></label>' +
       (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
       '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
       '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
       '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
-      '<p class="hint">Edit payment records or adjust chargeable days manually. Each added or removed day changes the accrued penalty by the current daily penalty of ' +
+      '<p class="hint">Changing chargeable days recalculates the 1% penalty and the rate contributions credited against it. Each added or removed day changes the accrued penalty by the current daily penalty of ' +
       money(rate.dailyRate) + '. Save to apply the adjustment.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
