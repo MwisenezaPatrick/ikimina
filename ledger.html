@@ -370,6 +370,12 @@ function rateDetails(p, asOf) {
     accrued += (req * daysBeforePayment + unpaid * daysUnpaid) * 0.01;
     lateDays += daysBeforePayment + daysUnpaid;
   }
+  const calculatedLateDays = lateDays;
+  const requestedDayAdjustment = Math.round(Number(p.chargeableDaysAdjustment) || 0);
+  const appliedDayAdjustment = Math.max(-calculatedLateDays, requestedDayAdjustment);
+  const dailyRate = unpaidContribution * 0.01;
+  accrued = Math.max(0, accrued + appliedDayAdjustment * dailyRate);
+  lateDays = calculatedLateDays + appliedDayAdjustment;
   const feeCredits = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || "") && (!f.at || f.at.slice(0, 10) <= today))
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   const roundedAccrued = Math.round(accrued);
@@ -383,8 +389,10 @@ function rateDetails(p, asOf) {
     outstanding: Math.max(0, roundedAccrued - roundedPaid),
     loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
     unpaidContribution: Math.round(unpaidContribution),
-    dailyRate: Math.round(unpaidContribution * 0.01),
-    lateDays
+    dailyRate: Math.round(dailyRate),
+    lateDays,
+    calculatedLateDays,
+    chargeableDaysAdjustment: appliedDayAdjustment
   };
 }
 const rateSavingsTotal = () => S.savings.reduce((sum, s) => {
@@ -516,8 +524,8 @@ function nextApprovalOpenToMe(l) {
   const a = l.approvals || {};
   if (l.personId === me().id) return false;
   if (l.status === "pending_first") return isPresident();
-  if (l.status === "pending_second") return isVicePresident() && a.first && a.first.byId !== me().id;
-  if (l.status === "pending_supervisor") return isSupervisor() && (!a.first || a.first.byId !== me().id) && (!a.second || a.second.byId !== me().id);
+  if (l.status === "pending_second") return isVicePresident() && a.first;
+  if (l.status === "pending_supervisor") return isSupervisor();
   return false;
 }
 function approvalBlockReason(l) {
@@ -531,12 +539,10 @@ function approvalBlockReason(l) {
     if (!a.first) return "The first approval is missing; an administrator must review this request.";
     if (!isVicePresident())
       return "Waiting on the Vice President. Your signed-in role is " + roleLabel(myRole()) + ".";
-    if (a.first.byId === me().id) return "The Vice President must be a different person from the President who approved first.";
   }
   if (l.status === "pending_supervisor") {
     if (!isSupervisor())
       return "Waiting on the Secretary. Your signed-in role is " + roleLabel(myRole()) + ".";
-    if ((a.first && a.first.byId === me().id) || (a.second && a.second.byId === me().id)) return "The Secretary must be different from both earlier approvers.";
   }
   if (!["pending_first", "pending_second", "pending_supervisor"].includes(l.status))
     return "This loan has status " + (l.status || "unknown") + " and is not at an approval stage.";
@@ -916,7 +922,7 @@ function adminDashboard() {
     '</div>' +
 
     (pend.length ? '<section class="panel" style="margin-top:18px"><header><div><h3>Waiting for a decision</h3>' +
-      '<p>Two different admins, then the supervisor.</p></div></header><div class="scroll"><table><tbody>' +
+      '<p>The President, Vice President, and Secretary approve in order.</p></div></header><div class="scroll"><table><tbody>' +
       pend.map(loanRow).join("") + '</tbody></table></div></section>' : "") +
 
     (S.loans.filter(isOverdue).length ? '<section class="panel"><header><div><h3>Past the due date</h3></div></header>' +
@@ -1250,7 +1256,9 @@ function requestedLoansView() {
           '<td><div class="stack">' + approvals + '</div>' +
             (nextApprovalOpenToMe(l) ? "" : '<div class="mini">' + esc(approvalBlockReason(l)) + '</div>') + '</td>' +
           '<td class="num"><div class="rowacts">' + approvalButton(l, true) +
-          '<button class="btn small" data-act="loan" data-id="' + l.id + '">View</button></div></td></tr>';
+          '<button class="btn small" data-act="loan" data-id="' + esc(l.id) + '">View</button>' +
+          (isAdmin() && canWrite() ? '<button class="btn small" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>' : "") +
+          '</div></td></tr>';
       }).join("") + '</tbody></table></div></section>' : '<div class="panel"><div class="empty"><b>No requested loans</b>Any new application will appear here for admin and supervisor review.</div></div>');
 }
 
@@ -1264,7 +1272,7 @@ function loansView() {
     (sub ? '<p>' + sub + '</p>' : "") + '</div></header><div class="scroll"><table><tbody>' + rows.map(loanRow).join("") + '</tbody></table></div></section>' : "";
 
   return '<div class="pagehead"><div><h2>Loans</h2>' +
-    '<p>A loan needs two different admins and the supervisor before any money leaves the box.</p></div>' +
+    '<p>A loan needs approval from the President, Vice President, and Secretary before any money leaves the box.</p></div>' +
     (canWrite() && (!cfg().blockConcurrentLoans || admin || !openLoansOf(mine.id).length)
       ? '<button class="btn primary" data-act="modal" data-m="request">Request a loan</button>' : "") + '</div>' +
     '<section class="vault" style="padding:18px 20px"><div class="lead"><div>' +
@@ -1274,7 +1282,7 @@ function loansView() {
       '<div><b>' + cfg().loanMultiplier + '\u00d7</b><small>Savings multiplier</small></div>' +
       '<div><b>' + (cfg().interestRate * 100) + '%</b><small>Interest, ' + cfg().repaymentDays + ' days</small></div></div></div></section>' +
     (!admin && loansOf(mine.id).length ? sec("Your loans", "", loansOf(mine.id)) : "") +
-    sec("Waiting for approval", "Two different admins, then the supervisor.", waiting) +
+    sec("Waiting for approval", "The President, Vice President, and Secretary approve in order.", waiting) +
     sec("Running", "Approved or already paid out.", running) +
     sec("Finished", "", done) +
     (!list.length ? '<div class="panel"><div class="empty"><b>No loans yet</b>Every approval and repayment will be recorded here.</div></div>' : "");
@@ -1463,7 +1471,7 @@ function memberModal(m) {
       '<label class="f"><span>Status</span><select id="m_status"><option value="active"' + (!p || p.status !== "inactive" ? " selected" : "") + '>Active</option>' +
         '<option value="inactive"' + (p && p.status === "inactive" ? " selected" : "") + '>Inactive</option></select></label></div>' +
       (p ? "" : '<label class="f"><span>First password</span><input type="text" id="m_pw" placeholder="They can change it later"></label>') +
-      '<p class="hint">A loan needs approvals from the President, a different Vice President, and the Secretary. Nobody may approve their own loan.</p>',
+      '<p class="hint">A loan needs approval from the President, Vice President, and Secretary in order. An officer may approve a stage assigned to their current role, but nobody may approve their own loan.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button>' +
       '<button class="btn primary" data-act="savemember" data-id="' + (p ? p.id : "") + '">' + (p ? "Save changes" : "Add member") + '</button>'
   };
@@ -1513,6 +1521,11 @@ function quickSaveModal(m) {
 function ratePaymentsModal(m) {
   const p = personById(m.id);
   if (!p) return { title: "Rate payments", body: '<p class="mini">This member is no longer available.</p>' };
+  const rate = rateDetails(p);
+  const daysAdjustment = Number.isInteger(m.daysAdjustment)
+    ? Math.max(-rate.calculatedLateDays, m.daysAdjustment)
+    : rate.chargeableDaysAdjustment;
+  const adjustedDays = Math.max(0, rate.calculatedLateDays + daysAdjustment);
   const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""))
     .slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
   const receivedTotal = fees.reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
@@ -1522,13 +1535,18 @@ function ratePaymentsModal(m) {
   ).join("");
   return {
     title: "Edit rate payments for " + esc(p.name),
-    body: '<div class="inline"><label class="f"><span>Chargeable days (calculated)</span><input type="number" value="' + num(rateDetails(p).lateDays) + '" readonly></label>' +
-      '<label class="f"><span>Total rate contributions received</span><input type="number" value="' + num(receivedTotal) + '" readonly></label></div>' +
+    body: '<div class="inline"><label class="f"><span>Chargeable days</span><input type="number" value="' + num(adjustedDays) + '" readonly></label>' +
+      '<button class="btn" data-act="rate-day-adjust" data-delta="-1"' + (adjustedDays === 0 ? ' disabled' : '') + '>Remove 1 day</button>' +
+      '<button class="btn" data-act="rate-day-adjust" data-delta="1">Add 1 day</button>' +
+      '<span class="mini">Manual adjustment: ' + (daysAdjustment > 0 ? '+' : '') + num(daysAdjustment) +
+      ' day(s)</span></div>' +
+      '<label class="f"><span>Total rate contributions received</span><input type="number" value="' + num(receivedTotal) + '" readonly></label>' +
       (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
       '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
       '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
       '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
-      '<p class="hint">Edit each received amount or payment date to correct the record. Chargeable days are calculated from contribution and payment dates and update after saving.</p>',
+      '<p class="hint">Edit payment records or adjust chargeable days manually. Each added or removed day changes the accrued penalty by the current daily penalty of ' +
+      money(rate.dailyRate) + '. Save to apply the adjustment.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
   };
 }
@@ -1751,6 +1769,20 @@ async function onAct(act, el) {
   S.formErr = null;
 
   if (act === "go") { S.route = el.getAttribute("data-k"); S.ledgerFor = null; window.scrollTo(0, 0); render(); return; }
+  if (act === "rate-day-adjust") {
+    if (!isAdmin() || !canWrite() || !S.modal || S.modal.m !== "rate-payments") return;
+    const p = personById(S.modal.id);
+    if (!p) { S.formErr = "That member could not be found."; render(); return; }
+    const rate = rateDetails(p);
+    const currentAdjustment = Number.isInteger(S.modal.daysAdjustment)
+      ? S.modal.daysAdjustment
+      : rate.chargeableDaysAdjustment;
+    const delta = Number(el.getAttribute("data-delta"));
+    if (delta !== -1 && delta !== 1) return;
+    S.modal.daysAdjustment = Math.max(-rate.calculatedLateDays, currentAdjustment + delta);
+    render();
+    return;
+  }
   if (act === "report-excel") { exportReportExcel(S.reportPeriod || S.period || thisPeriod()); return; }
   if (act === "report-pdf") {
     if (!isAdmin()) return;
@@ -1758,6 +1790,28 @@ async function onAct(act, el) {
     window.addEventListener("afterprint", afterPrint, { once: true });
     document.body.classList.add("print-report");
     window.print();
+    return;
+  }
+  if (act === "delete-loan-request") {
+    if (!isAdmin() || !canWrite()) { toast("Only an officer can delete a loan request."); return; }
+    const loan = S.loans.find(item => item.id === id);
+    if (!loan || !(loan.status || "").startsWith("pending")) {
+      toast("Only a pending loan application can be deleted.");
+      return;
+    }
+    if (S.repayments.some(repayment => repayment.loanId === id)) {
+      toast("This loan has repayments and cannot be deleted.");
+      return;
+    }
+    const borrower = personById(loan.personId);
+    if (!window.confirm("Permanently delete " + (loan.number || "this loan application") +
+      (borrower ? " for " + borrower.name : "") + "? This cannot be undone.")) return;
+    if (!S.sb) { toast("The ledger is not connected; the loan was not deleted."); return; }
+    const { error } = await S.sb.from("ikimina_loans").delete().eq("id", id);
+    if (error) { toast("The loan application could not be deleted. Try again."); throw error; }
+    S.loans = S.loans.filter(item => item.id !== id);
+    await logEvent("loan", "Deleted pending loan application " + (loan.number || id));
+    toast("Loan application deleted");
     return;
   }
   if (act === "close" || act === "veil") { S.modal = null; render(); return; }
@@ -1907,7 +1961,16 @@ async function onAct(act, el) {
     }
     for (const fee of updates) await put("fees/" + fee.id, fee);
     S.fees = S.fees.filter(f => !(f.personId === p.id && /rate/i.test(f.label || ""))).concat(updates);
-    await logEvent("rate", "Updated rate payments for " + p.name);
+    const currentRate = rateDetails(p);
+    const daysAdjustment = Number.isInteger(S.modal && S.modal.daysAdjustment)
+      ? Math.max(-currentRate.calculatedLateDays, S.modal.daysAdjustment)
+      : currentRate.chargeableDaysAdjustment;
+    if (daysAdjustment !== (Number(p.chargeableDaysAdjustment) || 0)) {
+      const updatedPerson = Object.assign({}, p, { chargeableDaysAdjustment: daysAdjustment });
+      await put("people/" + p.id, updatedPerson);
+      S.people = S.people.map(person => person.id === p.id ? updatedPerson : person);
+    }
+    await logEvent("rate", "Updated rate payments and chargeable day adjustment for " + p.name);
     S.modal = null; toast("Rate payments saved"); return;
   }
   if (act === "csv") { exportCSV(el.getAttribute("data-p")); return; }

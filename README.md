@@ -59,13 +59,17 @@ monthly contributions starting on the 16th. Amounts paid above the normal
 contribution cover that penalty first, then accrued loan interest at the loan's
 monthly rate (3% by default) on outstanding principal. Any remaining amount is
 carried forward as an interest credit; it does not count toward savings or
-reduce loan principal.
-Loan requests require approval from the President, a different Vice President,
-and the Secretary. Existing accounts with legacy Admin and Supervisor roles
-continue to work; Jules maps to President, Chadia to Vice President, and
-Supervisor accounts to Secretary.
-A President can approve only a request waiting on the President and cannot
-approve their own loan. Pending loan rows show why approval is unavailable.
+reduce loan principal. Officers can use **Edit paid rates** to add or remove
+chargeable days manually; each day adjustment also updates the penalty by the
+member's current daily penalty.
+Loan requests require approval from the President, Vice President, and
+Secretary in order. An officer may approve a stage assigned to their current
+role; nobody may approve their own loan. Existing accounts with legacy Admin
+and Supervisor roles continue to work; Jules maps to President, Chadia to Vice
+President, and Supervisor accounts to Secretary.
+A President can approve only a request waiting on the President. Officers can
+delete pending loan applications after confirmation; loans with repayments
+cannot be deleted. Pending loan rows show why approval is unavailable.
 President, Vice President, and Secretary accounts also have a **Reports** page.
 Choose a contribution month to review the group summary, member balances,
 chargeable days, and loans. Use **Save as PDF** to print or save the report as
