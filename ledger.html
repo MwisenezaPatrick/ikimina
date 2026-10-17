@@ -390,11 +390,19 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
   const roundedPaid = lateDays > 0
     ? Math.min(roundedAccrued, roundedFees + roundedOverpayments)
     : 0;
+  const manualAdjustment = p.rateManualAdjustment || null;
+  const hasManualAccrued = manualAdjustment && Number.isInteger(Number(manualAdjustment.accrued)) &&
+    Number(manualAdjustment.accrued) >= 0;
+  const hasManualPaid = manualAdjustment && Number.isInteger(Number(manualAdjustment.paid)) &&
+    Number(manualAdjustment.paid) >= 0;
+  const displayedAccrued = hasManualAccrued ? Number(manualAdjustment.accrued) : roundedAccrued;
+  const displayedPaid = hasManualPaid ? Number(manualAdjustment.paid) : roundedPaid;
   return {
-    accrued: roundedAccrued,
-    paid: roundedPaid,
-    outstanding: Math.max(0, roundedAccrued - roundedPaid),
+    accrued: displayedAccrued,
+    paid: displayedPaid,
+    outstanding: Math.max(0, displayedAccrued - displayedPaid),
     loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
+    manualAdjustment: !!(hasManualAccrued || hasManualPaid),
     unpaidContribution: Math.round(unpaidContribution),
     dailyRate: Math.round(dailyRate),
     lateDays,
@@ -1141,7 +1149,8 @@ function rateContributionsView() {
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
         const applied = Object.keys(interestCredits.byLoan).reduce((sum, id) => sum + interestCredits.byLoan[id], 0);
-        return '<tr><td class="name">' + esc(person.name) + '</td>' +
+        return '<tr><td class="name">' + esc(person.name) +
+        (rate.manualAdjustment ? '<div class="mini">Manual adjustment</div>' : '') + '</td>' +
         '<td class="num">' + money(rate.unpaidContribution) + '</td>' +
         '<td class="num">' + num(rate.lateDays) + '</td>' +
         '<td class="num">' + money(rate.dailyRate) + '</td>' +
@@ -1151,10 +1160,11 @@ function rateContributionsView() {
         '<td class="num">' + money(rate.penaltyCredit) + '</td>' +
         '<td class="num">' + money(loanInterestPaidInCash(person.id)) + '</td>' +
         '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td>' +
-        (editable ? '<td><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button></td>' : "") + '</tr>';
+        (editable ? '<td><div class="rowacts"><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button>' +
+          '<button class="btn small" data-act="modal" data-m="rate-adjustment" data-id="' + esc(person.id) + '">Manual adjustment</button></div></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">A member with zero chargeable days has no 1% penalty accrued and no rate contributions credited to the penalty. Otherwise, chargeable days are counted across contribution months, while the penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Cash interest repayments are shown separately from contribution-based interest credits.</p>';
+    '<p class="hint">Under automatic calculations, a member with zero chargeable days has no 1% penalty accrued and no rate contributions credited to the penalty; an officer can override these displayed totals using Manual adjustment. Otherwise, chargeable days are counted across contribution months, while the penalty is calculated against the unpaid contribution for each day. If a member paid some or all of a contribution late, the amount unpaid changed on the payment date, so multiplying total chargeable days by today\u2019s daily penalty will not equal the full historical penalty accrued. For example, if RWF 20,000 of a RWF 25,000 contribution is paid on the 18th, the first three late days are charged at RWF 250 per day and later days at RWF 50 per day. The daily penalty shown is the current rate on today\u2019s unpaid contributions. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Cash interest repayments are shown separately from contribution-based interest credits.</p>';
 }
 
 function buildReportData(period) {
@@ -1501,7 +1511,7 @@ function modalView() {
   const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
     editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal,
-    "cash-expense": cashExpenseModal,
+    "rate-adjustment": rateAdjustmentModal, "cash-expense": cashExpenseModal,
     "book-corrections": bookCorrectionsModal }[m.m];
   if (!f) return "";
   const v = f(m);
@@ -1606,6 +1616,21 @@ function ratePaymentsModal(m) {
       '<p class="hint">Changing chargeable days recalculates the 1% penalty and the rate contributions credited against it. Each added or removed day changes the accrued penalty by the current daily penalty of ' +
       money(rate.dailyRate) + '. Save to apply the adjustment.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
+  };
+}
+function rateAdjustmentModal(m) {
+  const p = personById(m.id);
+  if (!p) return { title: "Manual rate adjustment", body: '<p class="mini">This member is no longer available.</p>' };
+  const rate = rateDetails(p);
+  return {
+    title: "Manual rate adjustment for " + esc(p.name),
+    body: '<div class="calcout"><div><span>Calculated chargeable days</span><b>' + num(rate.lateDays) + '</b></div>' +
+      '<div><span>Current penalty outstanding</span><b>' + money(rate.outstanding) + '</b></div></div>' +
+      '<div class="inline"><label class="f"><span>1% penalty accrued (RWF)</span><input type="number" min="0" step="1" id="manual_rate_accrued" value="' + rate.accrued + '"></label>' +
+      '<label class="f"><span>Rate contributions received (RWF)</span><input type="number" min="0" step="1" id="manual_rate_paid" value="' + rate.paid + '"></label></div>' +
+      '<p class="hint">These amounts replace the calculated display totals and determine penalty outstanding. Chargeable days and cash records are unchanged. Clear the adjustment to return to automatic calculations.</p>',
+    foot: (rate.manualAdjustment ? '<button class="btn danger" data-act="clear-rate-adjustment" data-id="' + esc(p.id) + '">Clear adjustment</button>' : "") +
+      '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-adjustment" data-id="' + esc(p.id) + '">Save adjustment</button>'
   };
 }
 function bookCorrectionsPlan() {
@@ -1907,6 +1932,33 @@ async function onAct(act, el) {
     S.modal.daysAdjustment = Math.max(-rate.calculatedLateDays, currentAdjustment + delta);
     render();
     return;
+  }
+  if (act === "save-rate-adjustment" || act === "clear-rate-adjustment") {
+    if (!isAdmin() || !canWrite()) { toast("Only an officer can adjust rate balances."); return; }
+    const p = personById(id);
+    if (!p) { S.formErr = "That member could not be found."; render(); return; }
+    if (act === "clear-rate-adjustment") {
+      const updatedPerson = Object.assign({}, p);
+      delete updatedPerson.rateManualAdjustment;
+      await put("people/" + p.id, updatedPerson);
+      S.people = S.people.map(person => person.id === p.id ? updatedPerson : person);
+      await logEvent("rate", "Cleared manual rate balance adjustment for " + p.name);
+      S.modal = null; toast("Manual rate adjustment cleared"); return;
+    }
+    const accruedText = val("manual_rate_accrued"), paidText = val("manual_rate_paid");
+    const accrued = Number(accruedText), paid = Number(paidText);
+    if (!accruedText || !Number.isSafeInteger(accrued) || accrued < 0 ||
+        !paidText || !Number.isSafeInteger(paid) || paid < 0) {
+      S.formErr = "Enter non-negative whole RWF amounts for both fields."; render(); return;
+    }
+    const updatedPerson = Object.assign({}, p, {
+      rateManualAdjustment: { accrued, paid, updatedAt: nowISO(), updatedBy: me().name }
+    });
+    await put("people/" + p.id, updatedPerson);
+    S.people = S.people.map(person => person.id === p.id ? updatedPerson : person);
+    await logEvent("rate", "Manually adjusted rate balances for " + p.name +
+      ": 1% penalty accrued " + money(accrued) + ", rate contributions received " + money(paid));
+    S.modal = null; toast("Manual rate adjustment saved"); return;
   }
   if (act === "report-excel") { exportReportExcel(S.reportPeriod || S.period || thisPeriod()); return; }
   if (act === "report-pdf") {
