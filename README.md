@@ -43,8 +43,8 @@ earlier instructions). Click **Sign in**, and you should land on a
 members, their savings, and their existing loans. The sample book includes
 October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
 and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
-and Chadia in September, and first-month loan-interest credits of RWF 8,100
-for Jules and RWF 16,800 for Candide.
+and Deborah in October, and first-month loan-interest credits of RWF 8,100 for
+Jules and RWF 16,800 for Candide.
 On October 17, this means 0 chargeable days for members paid by the 15th,
 2 for Eric and Charlotte, and 1 for Patrick.
 From then on the data lives in Supabase, not in the page.
@@ -54,14 +54,15 @@ interest-only repayments in an existing ledger. Matching records are updated
 without duplicating them; conflicting October contribution records are flagged
 for review instead of overwritten.
 
-The **Rate contributions** page adds a fixed RWF 250 penalty per member for
-each chargeable day starting on the 16th, regardless of the member's normal
-contribution amount. A payment on or before the 15th has zero chargeable days;
-a late payment accrues through its payment date, while an unpaid balance
-continues accruing through today. Thus zero days means zero penalty, one day
-means RWF 250, and two days means RWF 500. Rate contributions received are
-credited toward the penalty, up to the amount owed, and show zero when there
-are no chargeable days. Amounts paid above the normal contribution cover the
+The **Rate contributions** page calculates a 1% daily penalty on each
+contribution's unpaid balance starting on the 16th. A payment on or before the
+15th has zero chargeable days; a late payment accrues through its payment date,
+and an unpaid balance continues accruing through today. The daily penalty
+therefore depends on the unpaid amount: RWF 250 for RWF 25,000 unpaid and RWF
+500 for RWF 50,000 unpaid. Rate contributions received shows recorded rate
+payments and eligible contribution overpayments even when no penalty is due;
+penalty outstanding never falls below zero, and excess receipts remain as rate
+credit. Amounts paid above the normal contribution cover the
 penalty first, then accrued loan interest at the loan's monthly rate (3% by
 default) on outstanding principal. Any remaining amount is carried forward as
 an interest credit; it does not count toward savings or reduce loan principal.
@@ -70,7 +71,7 @@ repayments, including Jules's RWF 8,100 and Candide's RWF 16,800, is reported
 separately from rate-based loan interest credits and advance contribution
 interest credit. Officers can use
 **Edit paid rates** to add or remove chargeable days manually; each day
-adjustment changes accrued penalty by RWF 250. Officers can also use **Manual
+adjustment changes accrued penalty by 1% of unpaid contributions. Officers can also use **Manual
 adjustment** to override a member's accrued penalty and rate contributions
 received totals; clearing that adjustment restores automatic calculations.
 Loan requests require approval from the President, Vice President, and
