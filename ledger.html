@@ -349,7 +349,7 @@ function daysBetween(from, to, inclusive) {
 }
 function rateDetails(p, asOf, dayAdjustmentOverride) {
   const today = asOf || todayISO(), req = monthlyOf(p);
-  let unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
+  let accrued = 0, unpaidContribution = 0, lateDays = 0, overpaymentCredits = 0;
   for (const per of openPeriods(p)) {
     const rec = S.savings.find(s => s.personId === p.id && s.period === per);
     const recordedDate = rec && rec.recordedAt ? rec.recordedAt.slice(0, 10) : null;
@@ -371,6 +371,7 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     const remainingStart = paymentDate && paymentDate >= chargeStart
       ? addDays(paymentDate, 1) : chargeStart;
     const daysUnpaid = unpaid > 0 ? daysBetween(remainingStart, today, true) : 0;
+    accrued += (req * daysBeforePayment + unpaid * daysUnpaid) * 0.01;
     lateDays += daysBeforePayment + daysUnpaid;
   }
   const calculatedLateDays = lateDays;
@@ -379,17 +380,16 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     : Math.round(Number(dayAdjustmentOverride) || 0);
   const appliedDayAdjustment = Math.max(-calculatedLateDays, requestedDayAdjustment);
   lateDays = calculatedLateDays + appliedDayAdjustment;
-  const dailyRate = 250;
-  const accrued = lateDays * dailyRate;
+  const dailyRate = unpaidContribution * 0.01;
+  accrued = Math.max(0, accrued + appliedDayAdjustment * dailyRate);
+  if (lateDays === 0) accrued = 0;
   const feeCredits = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || "") && (!f.at || f.at.slice(0, 10) <= today))
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   const roundedAccrued = Math.round(accrued);
   const roundedFees = Math.round(feeCredits);
   const roundedOverpayments = Math.round(overpaymentCredits);
   const overpaymentToPenalty = Math.min(roundedOverpayments, Math.max(0, roundedAccrued - roundedFees));
-  const roundedPaid = lateDays > 0
-    ? Math.min(roundedAccrued, roundedFees + roundedOverpayments)
-    : 0;
+  const roundedPaid = roundedFees + roundedOverpayments;
   const manualAdjustment = p.rateManualAdjustment || null;
   const hasManualAccrued = manualAdjustment && Number.isInteger(Number(manualAdjustment.accrued)) &&
     Number(manualAdjustment.accrued) >= 0;
@@ -401,6 +401,7 @@ function rateDetails(p, asOf, dayAdjustmentOverride) {
     accrued: displayedAccrued,
     paid: displayedPaid,
     outstanding: Math.max(0, displayedAccrued - displayedPaid),
+    penaltyCredit: Math.max(0, displayedPaid - displayedAccrued),
     loanInterestCredit: Math.max(0, roundedOverpayments - overpaymentToPenalty),
     manualAdjustment: !!(hasManualAccrued || hasManualPaid),
     unpaidContribution: Math.round(unpaidContribution),
@@ -611,8 +612,8 @@ const BOOK = [
   { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
   { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
   { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
-  { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
-  { id: "chadia", name: "Chadia", monthly: 25000, role: "vice_president", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, rateFee: { amount: 250, at: "2026-09-01" } },
+  { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0, rateFee: { amount: 250, at: "2026-10-17" } },
+  { id: "chadia", name: "Chadia", monthly: 25000, role: "vice_president", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0 },
   { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", pw: "Ramathan", loan: 0 },
   { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", pw: "Charlotte", loan: 0 },
   { id: "patrick", name: "Patrick", monthly: 25000, role: "secretary", email: "patrick@gmail.com", pw: "Patrick", loan: 0, rateFee: { amount: 250, at: "2026-10-16" } }
@@ -645,7 +646,7 @@ async function seedBook() {
       });
     }
     if (b.rateFee) {
-      const feeId = b.id === "patrick" ? "fee_patrick_2026-10" : "fee_" + b.id;
+      const feeId = b.id === "patrick" || b.id === "deborah" ? "fee_" + b.id + "_2026-10" : "fee_" + b.id;
       await put("fees/" + feeId, {
         id: feeId, personId: b.id, amount: b.rateFee.amount,
         label: "Rate contribution (1%)", at: b.rateFee.at
@@ -849,7 +850,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest credited for Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest credited for Jules (RWF 8,100) and Candide (RWF 16,800), Deborah\u2019s and Patrick\u2019s RWF 250 October rate contributions, and the October payment dates. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -1133,7 +1134,7 @@ function rateContributionsView() {
   const outstanding = rows.reduce((sum, row) => sum + row.rate.outstanding, 0);
   const penaltyCredit = rows.reduce((sum, row) => sum + row.rate.penaltyCredit, 0);
   const editable = isAdmin() && canWrite();
-  return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Each chargeable day from the 16th incurs a fixed RWF 250 penalty per member.</p></div>' +
+  return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Unpaid contributions accrue a daily penalty of 1% of the unpaid amount, starting on the 16th.</p></div>' +
     (editable ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(accrued) + '</b><small>Rate accrued</small></div>' +
@@ -1144,7 +1145,7 @@ function rateContributionsView() {
     '<section class="panel"><header><div><h3>Member rate balances</h3>' +
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
-      '<th class="num">Penalty per chargeable day</th><th class="num">Penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Current daily penalty (1%)</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
       '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Rate interest credited to loans</th><th class="num">Advance contribution interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
@@ -1164,7 +1165,7 @@ function rateContributionsView() {
           '<button class="btn small" data-act="modal" data-m="rate-adjustment" data-id="' + esc(person.id) + '">Manual adjustment</button></div></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">The penalty is RWF 250 per chargeable day for every member: zero days means zero accrued, one day means RWF 250, and two days means RWF 500. Days start on the 16th and stop when the contribution is paid; unpaid contributions continue accruing days through today. Rate contributions received are credited against the accrued penalty, up to the penalty owed, and are zero when there are no chargeable days. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
+    '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows actual rate payments and eligible contribution overpayments; penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
 }
 
 function buildReportData(period) {
@@ -1635,7 +1636,7 @@ function rateAdjustmentModal(m) {
 }
 function bookCorrectionsPlan() {
   const feeSpecs = [
-    { id: "fee_chadia", personId: "chadia", amount: 250, at: "2026-09-01" },
+    { id: "fee_deborah_2026-10", personId: "deborah", amount: 250, at: "2026-10-17" },
     { id: "fee_patrick_2026-10", personId: "patrick", amount: 250, at: "2026-10-16" }
   ];
   const repaymentSpecs = [
@@ -1649,7 +1650,7 @@ function bookCorrectionsPlan() {
       recordedAt: at + "T12:00:00.000Z", recordedBy: "Contribution book"
     };
   });
-  const fees = [], repayments = [], savings = [];
+  const fees = [], feeDeletions = [], repayments = [], savings = [];
 
   for (const spec of octoberSavingsSpecs) {
     const matches = S.savings.filter(s => s.personId === spec.personId && s.period === spec.period);
@@ -1683,6 +1684,16 @@ function bookCorrectionsPlan() {
       throw new Error("An existing rate payment for " + spec.personId + " does not match the expected book entry; review it first.");
     }
   }
+  const chadiaRateFees = S.fees.filter(f => f.personId === "chadia" && /rate/i.test(f.label || ""));
+  if (chadiaRateFees.length > 1) throw new Error("Multiple rate contributions are recorded for Chadia; review them before replacing the book entry.");
+  if (chadiaRateFees.length === 1) {
+    const oldChadiaFee = chadiaRateFees[0];
+    if (oldChadiaFee.id !== "fee_chadia" || Number(oldChadiaFee.amount) !== 250 ||
+        (oldChadiaFee.at || "").slice(0, 10) !== "2026-09-01") {
+      throw new Error("Chadia's existing rate contribution does not match the old book entry; review it before replacing it.");
+    }
+    feeDeletions.push(oldChadiaFee);
+  }
 
   for (const spec of repaymentSpecs) {
     if (!S.loans.some(l => l.id === spec.loanId && l.personId === spec.personId)) {
@@ -1709,12 +1720,13 @@ function bookCorrectionsPlan() {
       throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first-month interest payment cannot be identified safely.");
     }
   }
-  return { fees, repayments, savings };
+  return { fees, feeDeletions, repayments, savings };
 }
 function bookCorrectionsTotals(plan) {
   const feesBefore = S.fees, repaymentsBefore = S.repayments, savingsBefore = S.savings;
   try {
-    S.fees = feesBefore.filter(f => !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
+    S.fees = feesBefore.filter(f => !plan.feeDeletions.some(d => d.id === f.id) &&
+      !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
     S.repayments = repaymentsBefore.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
     S.savings = savingsBefore.filter(s => !plan.savings.some(u => u.id === s.id)).concat(plan.savings);
     return {
@@ -1744,9 +1756,10 @@ function bookCorrectionsModal() {
         ". No records will be changed; review existing payments first.";
     }
   } catch (e) { problem = e.message; }
-  const updates = plan ? plan.fees.length + plan.repayments.length + plan.savings.length : 0;
+  const updates = plan ? plan.fees.length + plan.feeDeletions.length + plan.repayments.length + plan.savings.length : 0;
   const body = '<p>Reconcile the contribution book with the existing ledger:</p><ul>' +
-    '<li>Chadia rate payment: RWF 250</li><li>Patrick rate payment: RWF 250</li>' +
+    '<li>Deborah rate contribution: RWF 250</li><li>Patrick rate contribution: RWF 250</li>' +
+    '<li>Replace Chadia\u2019s old rate contribution entry</li>' +
     '<li>October contributions paid by the 15th, except Patrick on the 16th</li>' +
     '<li>Eric and Charlotte October contributions are unpaid</li>' +
     '<li>Jules first-month loan interest credited: RWF 8,100</li><li>Candide first-month loan interest credited: RWF 16,800</li></ul>' +
@@ -2131,13 +2144,19 @@ async function onAct(act, el) {
       render();
       return;
     }
+    for (const fee of plan.feeDeletions) {
+      if (!S.sb) { toast("The ledger is not connected; book corrections were not applied."); return; }
+      const { error } = await S.sb.from("ikimina_fees").delete().eq("id", fee.id);
+      if (error) { toast("The previous Chadia rate contribution could not be replaced."); throw error; }
+    }
     for (const fee of plan.fees) await put("fees/" + fee.id, fee);
     for (const repayment of plan.repayments) await put("repayments/" + repayment.id, repayment);
     for (const saving of plan.savings) await put("savings/" + saving.id, saving);
-    S.fees = S.fees.filter(f => !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
+    S.fees = S.fees.filter(f => !plan.feeDeletions.some(d => d.id === f.id) &&
+      !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
     S.repayments = S.repayments.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
     S.savings = S.savings.filter(s => !plan.savings.some(u => u.id === s.id)).concat(plan.savings);
-    await logEvent("book-corrections", "Applied recorded October contributions, rate payments, and first-month interest payments");
+    await logEvent("book-corrections", "Applied recorded October contributions, Deborah and Patrick rate payments, and first-month interest payments");
     S.modal = null;
     toast("Book payments reconciled");
     return;
