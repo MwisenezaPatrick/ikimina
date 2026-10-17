@@ -403,7 +403,12 @@ function loansOf(pid) { return S.loans.filter(l => l.personId === pid); }
 function openLoansOf(pid) { return loansOf(pid).filter(l => OPEN_STATES.includes(l.status)); }
 const pendingLoans = () => S.loans.filter(l => (l.status || "").indexOf("pending") === 0);
 
-function splitPart(r, field) { const l = S.loans.find(x => x.id === r.loanId); if (!l || !l.total) return 0; return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total); }
+function splitPart(r, field) {
+  if (r[field] != null) return Math.max(0, Number(r[field]) || 0);
+  const l = S.loans.find(x => x.id === r.loanId);
+  if (!l || !l.total) return 0;
+  return (Number(r.amount) || 0) * (Number(l[field]) || 0) / Number(l.total);
+}
 function addMonths(iso, months) {
   const source = new Date(iso + "T00:00:00Z");
   const day = source.getUTCDate();
@@ -519,8 +524,8 @@ async function hashPw(pw) {
    Seed — the contribution book
    ============================================================ */
 const BOOK = [
-  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000 },
-  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000 },
+  { id: "jules", name: "Jules", monthly: 50000, role: "admin", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
+  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
   { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
   { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0 },
   { id: "chadia", name: "Chadia", monthly: 25000, role: "admin", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0, fee: 250 },
@@ -559,6 +564,13 @@ async function seedBook() {
         requestedAt: "2026-09-01T00:00:00.000Z", disbursedAt: "2026-09-01", dueDate: addDays("2026-09-01", 45),
         fromBook: true
       });
+      if (b.interestPaid) {
+        const rid = "repay_book_" + b.id + "_first_interest";
+        await put("repayments/" + rid, {
+          id: rid, loanId: lid, amount: b.interestPaid, principal: 0,
+          interest: b.interestPaid, at: "2026-10-01", by: "Contribution book"
+        });
+      }
     }
   }
   await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Sep 2026");
@@ -734,7 +746,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to September 2026, the three loans running, and Chadia\u2019s 250 rate contribution. Sign-in accounts are created for everyone.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month interest paid by Jules (RWF 8,100) and Candide (RWF 16,800), Chadia\u2019s RWF 250 September rate contribution, and Patrick\u2019s RWF 250 October rate payment. October contributions were paid by the 15th except Eric and Charlotte, who are unpaid, and Patrick, who paid on the 16th. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -787,6 +799,7 @@ function adminDashboard() {
   const pend = pendingLoans();
 
   return '<div class="pagehead"><div><h2>Dashboard</h2><p>Where the group\u2019s money is sitting, and what needs a decision.</p></div>' +
+    (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="book-corrections">Apply recorded book payments</button> ' : "") +
     (canWrite() ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     vaultHero() +
     '<div class="grid2" style="margin-bottom:18px">' +
@@ -1004,19 +1017,21 @@ function rateContributionsView() {
   const accrued = rows.reduce((sum, row) => sum + row.rate.accrued, 0);
   const paid = rows.reduce((sum, row) => sum + row.rate.paid, 0);
   const outstanding = rows.reduce((sum, row) => sum + row.rate.outstanding, 0);
+  const penaltyCredit = rows.reduce((sum, row) => sum + row.rate.penaltyCredit, 0);
   const editable = isAdmin() && canWrite();
   return '<div class="pagehead"><div><h2>Rate contributions</h2><p>Late contributions incur a simple 1% daily rate starting on the 16th of each month.</p></div>' +
     (editable ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     '<div class="grid2" style="margin-bottom:18px">' +
       '<div class="stat"><b>' + money(accrued) + '</b><small>Rate accrued</small></div>' +
-      '<div class="stat"><b>' + money(paid) + '</b><small>1% penalty paid</small></div>' +
+      '<div class="stat"><b>' + money(paid) + '</b><small>Rate contributions received</small></div>' +
       '<div class="stat"><b>' + money(outstanding) + '</b><small>Rate outstanding</small></div>' +
+      '<div class="stat"><b>' + money(penaltyCredit) + '</b><small>Rate credit remaining</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>Member rate balances</h3>' +
       '<p>Amounts paid above a member\u2019s normal monthly contribution count toward their rate balance.</p></div></header>' +
     (rows.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Unpaid contribution</th><th class="num">Chargeable days</th>' +
-      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">1% penalty paid</th><th class="num">Penalty outstanding</th>' +
-      '<th class="num">Loan interest credited</th><th class="num">Advance interest credit</th></tr></thead><tbody>' +
+      '<th class="num">Daily penalty</th><th class="num">1% penalty accrued</th><th class="num">Rate contributions received</th><th class="num">Penalty outstanding</th>' +
+      '<th class="num">Rate credit remaining</th><th class="num">Loan interest credited</th><th class="num">Advance interest credit</th>' + (editable ? '<th></th>' : "") + '</tr></thead><tbody>' +
       rows.map(({ person, rate }) => {
         const interestCredits = loanInterestCreditAllocations(person.id);
         const applied = Object.keys(interestCredits.byLoan).reduce((sum, id) => sum + interestCredits.byLoan[id], 0);
@@ -1027,7 +1042,9 @@ function rateContributionsView() {
         '<td class="num">' + money(rate.accrued) + '</td>' +
         '<td class="num">' + money(rate.paid) + '</td>' +
         '<td class="num">' + (rate.outstanding ? '<span class="dot no">' + money(rate.outstanding) + '</span>' : '<span class="dot ok">' + money(0) + '</span>') + '</td>' +
-        '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td></tr>';
+        '<td class="num">' + money(rate.penaltyCredit) + '</td>' +
+        '<td class="num">' + money(applied) + '</td><td class="num">' + money(interestCredits.advance) + '</td>' +
+        (editable ? '<td><button class="btn small" data-act="modal" data-m="rate-payments" data-id="' + esc(person.id) + '">Edit paid rates</button></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
     '<p class="hint">Late contributions accrue a simple 1% daily penalty from the 16th. Extra payments cover that penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Any remaining interest credit carries forward; it does not reduce loan principal.</p>';
@@ -1255,7 +1272,8 @@ function modalView() {
   const m = S.modal;
   const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
-    editme: editMeModal, password: passwordModal, resetpw: resetPwModal }[m.m];
+    editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal,
+    "book-corrections": bookCorrectionsModal }[m.m];
   if (!f) return "";
   const v = f(m);
   return '<div class="veil" data-act="veil"><div class="modal" role="dialog" aria-modal="true">' +
@@ -1323,6 +1341,116 @@ function quickSaveModal(m) {
       '<label class="f"><span>Amount received</span><input type="number" id="q_amount" value="' + monthlyOf(personById(pick)) + '"></label></div>' +
       '<p class="hint">This replaces whatever is recorded for that member in that month.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="quicksave">Record payment</button>'
+  };
+}
+function ratePaymentsModal(m) {
+  const p = personById(m.id);
+  if (!p) return { title: "Rate payments", body: '<p class="mini">This member is no longer available.</p>' };
+  const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""))
+    .slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  const paymentFields = fees.map(f =>
+    '<div class="inline"><label class="f"><span>Paid amount on ' + fmtDate(f.at) + '</span><input type="number" min="0" step="1" id="rate_amount_' + esc(f.id) + '" value="' + (Number(f.amount) || 0) + '"></label>' +
+    '<label class="f"><span>Payment date</span><input type="date" id="rate_date_' + esc(f.id) + '" value="' + esc((f.at || todayISO()).slice(0, 10)) + '"></label></div>'
+  ).join("");
+  return {
+    title: "Edit rate payments for " + esc(p.name),
+    body: (paymentFields || '<p class="mini">No rate payments recorded for this member yet.</p>') +
+      '<h4 style="margin:16px 0 4px">Add a payment</h4>' +
+      '<div class="inline"><label class="f"><span>Amount received</span><input type="number" min="0" step="1" id="rate_new_amount" value="0"></label>' +
+      '<label class="f"><span>Payment date</span><input type="date" id="rate_new_date" value="' + todayISO() + '"></label></div>' +
+      '<p class="hint">Editing updates the recorded rate amount and date. New payments are added separately.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-payments" data-id="' + esc(p.id) + '">Save rate payments</button>'
+  };
+}
+function bookCorrectionsPlan() {
+  const feeSpecs = [
+    { id: "fee_chadia", personId: "chadia", amount: 250, at: "2026-09-01" },
+    { id: "fee_patrick_2026-10", personId: "patrick", amount: 250, at: "2026-10-16" }
+  ];
+  const repaymentSpecs = [
+    { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 8100 },
+    { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 }
+  ];
+  const fees = [], repayments = [];
+
+  for (const spec of feeSpecs) {
+    const personFees = S.fees.filter(f => f.personId === spec.personId && /rate/i.test(f.label || ""));
+    if (personFees.length > 1) throw new Error("More than one rate payment is already recorded for " + spec.personId + "; review those records first.");
+    const existing = personFees[0];
+    if (!existing) {
+      fees.push(Object.assign({}, spec, { label: "Rate contribution (1%)" }));
+    } else if (existing.id === spec.id) {
+      if (Number(existing.amount) !== spec.amount || (existing.at || "").slice(0, 10) !== spec.at) {
+        fees.push(Object.assign({}, existing, spec, { label: "Rate contribution (1%)" }));
+      }
+    } else if (Number(existing.amount) !== spec.amount || (existing.at || "").slice(0, 7) !== spec.at.slice(0, 7)) {
+      throw new Error("An existing rate payment for " + spec.personId + " does not match the expected book entry; review it first.");
+    }
+  }
+
+  for (const spec of repaymentSpecs) {
+    if (!S.loans.some(l => l.id === spec.loanId && l.personId === spec.personId)) {
+      throw new Error("The expected loan for " + spec.personId + " was not found.");
+    }
+    const loanPayments = S.repayments.filter(r => r.loanId === spec.loanId);
+    const canonical = loanPayments.find(r => r.id === spec.id);
+    const exactPayments = loanPayments.filter(r => Number(r.amount) === spec.amount);
+    if (exactPayments.length > 1 || (canonical && exactPayments.some(r => r.id !== canonical.id))) {
+      throw new Error("Duplicate matching interest payments exist for " + spec.personId + "; review them first.");
+    }
+    if (canonical) {
+      if (Number(canonical.amount) !== spec.amount || Number(canonical.principal) !== 0 || Number(canonical.interest) !== spec.amount) {
+        repayments.push(Object.assign({}, canonical, spec, { principal: 0, interest: spec.amount }));
+      }
+    } else if (exactPayments.length === 1) {
+      const existing = exactPayments[0];
+      if (Number(existing.principal) !== 0 || Number(existing.interest) !== spec.amount) {
+        repayments.push(Object.assign({}, existing, spec, { id: existing.id, principal: 0, interest: spec.amount }));
+      }
+    } else if (loanPayments.length === 0) {
+      repayments.push(Object.assign({}, spec, { principal: 0, interest: spec.amount, at: "2026-10-01", by: "Contribution book" }));
+    } else {
+      throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first-month interest payment cannot be identified safely.");
+    }
+  }
+  return { fees, repayments };
+}
+function bookCorrectionsTotals(plan) {
+  const feesBefore = S.fees, repaymentsBefore = S.repayments;
+  try {
+    S.fees = feesBefore.filter(f => !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
+    S.repayments = repaymentsBefore.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
+    return {
+      rates: Math.round(S.fees.filter(f => /rate/i.test(f.label || "")).reduce((sum, f) => sum + (Number(f.amount) || 0), 0)),
+      interest: Math.round(interestCollected())
+    };
+  } finally {
+    S.fees = feesBefore;
+    S.repayments = repaymentsBefore;
+  }
+}
+function bookCorrectionsModal() {
+  let plan, totals, problem = "";
+  try {
+    plan = bookCorrectionsPlan();
+    totals = bookCorrectionsTotals(plan);
+    if (totals.rates !== 500 || totals.interest !== 24900) {
+      problem = "Applying these entries would leave totals at " + money(totals.rates) + " for rate contributions and " +
+        money(totals.interest) + " for interest earned. No records will be changed; review existing payments first.";
+    }
+  } catch (e) { problem = e.message; }
+  const updates = plan ? plan.fees.length + plan.repayments.length : 0;
+  const body = '<p>Reconcile the contribution book with the existing ledger:</p><ul>' +
+    '<li>Chadia rate payment: RWF 250</li><li>Patrick rate payment: RWF 250</li>' +
+    '<li>Jules first-month loan interest: RWF 8,100</li><li>Candide first-month loan interest: RWF 16,800</li></ul>' +
+    '<p class="hint">Existing matching payments are updated in place. Missing payments are added. Unrelated records are never changed, and applying this again will not duplicate these entries.</p>' +
+    (problem ? '<div class="err">' + esc(problem) + '</div>' :
+      '<p class="mini">' + (updates ? updates + ' record(s) will be added or corrected.' : 'These payments are already reconciled.') + '</p>');
+  return {
+    title: "Apply recorded book payments",
+    body,
+    foot: '<button class="btn" data-act="close">Cancel</button>' +
+      (!problem && updates ? '<button class="btn primary" data-act="apply-book-corrections">Apply corrections</button>' : "")
   };
 }
 
@@ -1506,6 +1634,61 @@ async function onAct(act, el) {
     if (!pid) { S.formErr = "Pick a member."; render(); return; }
     await recordSaving(pid, val("q_period"), valn("q_amount"));
     S.modal = null; return;
+  }
+  if (act === "apply-book-corrections") {
+    if (!isAdmin() || !canWrite()) { S.formErr = "Only an admin can apply book payment corrections."; render(); return; }
+    let plan, totals;
+    try {
+      plan = bookCorrectionsPlan();
+      totals = bookCorrectionsTotals(plan);
+    } catch (e) {
+      S.formErr = e.message;
+      render();
+      return;
+    }
+    if (totals.rates !== 500 || totals.interest !== 24900) {
+      S.formErr = "The ledger changed since this dialog opened. Review the current payments before applying corrections.";
+      render();
+      return;
+    }
+    for (const fee of plan.fees) await put("fees/" + fee.id, fee);
+    for (const repayment of plan.repayments) await put("repayments/" + repayment.id, repayment);
+    S.fees = S.fees.filter(f => !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
+    S.repayments = S.repayments.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
+    await logEvent("book-corrections", "Applied recorded rate and first-month interest payments");
+    S.modal = null;
+    toast("Book payments reconciled");
+    return;
+  }
+  if (act === "save-rate-payments") {
+    if (!isAdmin() || !canWrite()) { S.formErr = "Only an admin can edit rate payments."; render(); return; }
+    const p = personById(id);
+    if (!p) { S.formErr = "That member could not be found."; render(); return; }
+    const fees = S.fees.filter(f => f.personId === p.id && /rate/i.test(f.label || ""));
+    const updates = [];
+    for (const fee of fees) {
+      const amountText = val("rate_amount_" + fee.id), amount = Number(amountText);
+      const at = val("rate_date_" + fee.id);
+      if (amountText === "" || !Number.isFinite(amount) || amount < 0) {
+        S.formErr = "Enter a valid rate payment amount for every recorded payment."; render(); return;
+      }
+      if (!at) { S.formErr = "Choose a date for every recorded rate payment."; render(); return; }
+      updates.push(Object.assign({}, fee, { amount: Math.round(amount), at }));
+    }
+    const newAmountText = val("rate_new_amount");
+    if (newAmountText !== "") {
+      const amount = Number(newAmountText), at = val("rate_new_date");
+      if (!Number.isFinite(amount) || amount < 0) { S.formErr = "Enter a valid amount for the new rate payment."; render(); return; }
+      if (amount > 0 && !at) { S.formErr = "Choose a date for the new rate payment."; render(); return; }
+      if (amount > 0) {
+        const feeId = "fee_" + uid();
+        updates.push({ id: feeId, personId: p.id, amount: Math.round(amount), label: "Rate contribution (1%)", at });
+      }
+    }
+    for (const fee of updates) await put("fees/" + fee.id, fee);
+    S.fees = S.fees.filter(f => !(f.personId === p.id && /rate/i.test(f.label || ""))).concat(updates);
+    await logEvent("rate", "Updated rate payments for " + p.name);
+    S.modal = null; toast("Rate payments saved"); return;
   }
   if (act === "csv") { exportCSV(el.getAttribute("data-p")); return; }
 
