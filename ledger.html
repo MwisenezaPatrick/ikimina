@@ -984,7 +984,10 @@ function loanRow(l) {
   const p = personById(l.personId), over = isOverdue(l);
   const days = l.dueDate ? daysFromToday(l.dueDate) : null;
   return '<tr data-act="loan" data-id="' + l.id + '" style="cursor:pointer">' +
-    '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div></td>' +
+    '<td><span class="name">' + esc(p ? p.name : "Unknown") + '</span><div class="mini">' + esc(l.number) + '</div>' +
+      (isAdmin() && canWrite() && (l.status || "").startsWith("pending")
+        ? '<div class="rowacts" style="justify-content:flex-start;margin-top:6px"><button class="btn small danger" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button></div>'
+        : "") + '</td>' +
     '<td class="num">' + money(l.principal) + '<div class="mini">repay ' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</div></td>' +
     '<td><span class="tag ' + (over ? "red" : STATE_TAG[l.status] || "blue") + '">' + (over ? "Overdue" : STATE_LABEL[l.status] || l.status || "Unknown") + '</span>' +
       ((l.status || "").startsWith("pending") && !nextApprovalOpenToMe(l)
@@ -993,9 +996,6 @@ function loanRow(l) {
     '<td class="num"><div class="rowacts">' +
       approvalButton(l, true) +
       '<span class="btn small">Open</span>' +
-      (isAdmin() && canWrite() && (l.status || "").startsWith("pending")
-        ? '<button class="btn small" data-act="delete-loan-request" data-id="' + esc(l.id) + '">Delete request</button>'
-        : "") +
       '</div></td></tr>';
 }
 
