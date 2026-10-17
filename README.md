@@ -43,8 +43,8 @@ earlier instructions). Click **Sign in**, and you should land on a
 members, their savings, and their existing loans. The sample book includes
 October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
 and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
-and Chadia in September, and first-month loan-interest-only payments of
-RWF 8,100 from Jules and RWF 16,800 from Candide.
+and Chadia in September, and first-month loan-interest credits of RWF 8,100
+for Jules and RWF 16,800 for Candide.
 On October 17, this means 0 chargeable days for members paid by the 15th,
 2 for Eric and Charlotte, and 1 for Patrick.
 From then on the data lives in Supabase, not in the page.
@@ -60,9 +60,10 @@ contribution cover that penalty first, then accrued loan interest at the loan's
 monthly rate (3% by default) on outstanding principal. Any remaining amount is
 carried forward as an interest credit; it does not count toward savings or
 reduce loan principal. Zero chargeable days means zero penalty accrued and zero
-rate contributions credited to the penalty. Cash loan-interest repayments,
-including Jules's RWF 8,100 and Candide's RWF 16,800 payments, are reported
-separately from contribution-based interest credits. Officers can use
+rate contributions credited to the penalty. Loan interest credited from
+repayments, including Jules's RWF 8,100 and Candide's RWF 16,800, is reported
+separately from rate-based loan interest credits and advance contribution
+interest credit. Officers can use
 **Edit paid rates** to add or remove chargeable days manually; each day
 adjustment also updates the penalty by the member's current daily penalty.
 Loan requests require approval from the President, Vice President, and
