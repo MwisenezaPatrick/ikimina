@@ -297,9 +297,13 @@ const account = () => S.accounts.find(a => a.id === S.session) || null;
 const me = () => { const a = account(); return a ? personById(a.personId) : null; };
 const roleOf = p => {
   if (!p) return "member";
-  if (["member", "president", "vice_president", "secretary"].includes(p.role)) return p.role;
-  if (p.role === "admin") return p.id === "chadia" ? "vice_president" : "president";
-  if (p.role === "supervisor") return "secretary";
+  const role = String(p.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["member", "president", "vice_president", "secretary"].includes(role)) return role;
+  if (["vicepresident", "vp", "admin_2"].includes(role)) return "vice_president";
+  if (role === "secretariat") return "secretary";
+  if (["admin", "admin_1", "administrator"].includes(role))
+    return p.id === "chadia" ? "vice_president" : "president";
+  if (["supervisor", "secretary"].includes(role)) return "secretary";
   return "member";
 };
 const myRole = () => roleOf(me());
@@ -521,6 +525,13 @@ function approvalBlockReason(l) {
     if ((a.first && a.first.byId === me().id) || (a.second && a.second.byId === me().id)) return "The Secretary must be different from both earlier approvers.";
   }
   return "This request is not awaiting your approval.";
+}
+function approvalButton(l, small) {
+  if (!isAdmin() || !(l.status || "").startsWith("pending")) return "";
+  const allowed = nextApprovalOpenToMe(l);
+  return '<button class="btn' + (small ? ' small' : '') + (allowed ? ' primary' : '') + '" ' +
+    (allowed ? 'data-act="approve" data-id="' + esc(l.id) + '"' : 'disabled title="' + esc(approvalBlockReason(l)) + '"') +
+    '>Approve</button>';
 }
 const actionCount = () => (isAdmin() ? S.loans.filter(nextApprovalOpenToMe).length : 0);
 
@@ -1112,7 +1123,7 @@ function requestedLoansView() {
           '<td><span class="tag ' + STATE_TAG[l.status] + '">' + STATE_LABEL[l.status] + '</span></td>' +
           '<td><div class="stack">' + approvals + '</div>' +
             (nextApprovalOpenToMe(l) ? "" : '<div class="mini">' + esc(approvalBlockReason(l)) + '</div>') + '</td>' +
-          '<td class="num"><div class="rowacts">' + (nextApprovalOpenToMe(l) ? '<button class="btn small primary" data-act="approve" data-id="' + l.id + '">Approve</button>' : '') +
+          '<td class="num"><div class="rowacts">' + approvalButton(l, true) +
           '<button class="btn small" data-act="loan" data-id="' + l.id + '">View</button></div></td></tr>';
       }).join("") + '</tbody></table></div></section>' : '<div class="panel"><div class="empty"><b>No requested loans</b>Any new application will appear here for admin and supervisor review.</div></div>');
 }
@@ -1150,12 +1161,12 @@ function loanDetail(l) {
   const rs = S.repayments.filter(r => r.loanId === l.id).sort((x, y) => (x.at < y.at ? 1 : -1));
   let acts = "";
   if (canWrite()) {
-    if (nextApprovalOpenToMe(l)) acts += '<button class="btn primary" data-act="approve" data-id="' + l.id + '">Approve</button>';
     if ((l.status || "").indexOf("pending") === 0 && isAdmin() && me() && l.personId !== me().id)
       acts += '<button class="btn danger" data-act="modal" data-m="reject" data-id="' + l.id + '">Reject</button>';
     if (l.status === "approved" && isAdmin()) acts += '<button class="btn primary" data-act="modal" data-m="disburse" data-id="' + l.id + '">Pay the money out</button>';
     if (l.status === "disbursed" && isAdmin()) acts += '<button class="btn primary" data-act="modal" data-m="repay" data-id="' + l.id + '">Record a repayment</button>';
   }
+  acts = approvalButton(l) + acts;
   return '<div class="agreement" id="agreementDoc"><h3>Loan agreement</h3>' +
     '<div class="mini">' + esc(c.groupName) + ' \u00b7 ' + esc(l.number) + '</div><dl>' +
     '<dt>Member</dt><dd>' + esc(p.name) + '</dd>' +
