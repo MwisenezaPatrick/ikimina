@@ -1556,6 +1556,7 @@ function editMeModal() {
   return {
     title: "My details",
     body: '<label class="f"><span>Full name</span><input type="text" id="e_name" value="' + esc(p.name) + '"></label>' +
+      '<label class="f"><span>Email for signing in</span><input type="email" id="e_email" value="' + esc(account() ? account().email : "") + '" autocomplete="email" required></label>' +
       '<label class="f"><span>Phone</span><input type="text" id="e_phone" value="' + esc(p.phone || "") + '"></label>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="saveme">Save</button>'
   };
@@ -2106,7 +2107,23 @@ async function onAct(act, el) {
   }
   if (act === "saveme") {
     const p = me();
-    await put("people/" + p.id, Object.assign({}, p, { name: val("e_name") || p.name, phone: val("e_phone") }));
+    const ac = account();
+    if (!p || !ac) { toast("Your signed-in account could not be found."); return; }
+    const email = val("e_email").toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      S.formErr = "Enter a valid email address."; render(); return;
+    }
+    if (S.accounts.some(other => other.id !== ac.id && (other.email || "").toLowerCase() === email)) {
+      S.formErr = "That email address is already used by another account."; render(); return;
+    }
+    await put("people/" + p.id, Object.assign({}, p, {
+      name: val("e_name") || p.name, email, phone: val("e_phone")
+    }));
+    await put("accounts/" + ac.id, Object.assign({}, ac, { email }));
+    p.name = val("e_name") || p.name;
+    p.email = email;
+    p.phone = val("e_phone");
+    ac.email = email;
     S.modal = null; toast("Saved"); return;
   }
 
