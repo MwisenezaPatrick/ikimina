@@ -35,7 +35,64 @@ window.SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
 Replace both placeholder strings with the Project URL and anon key
 from step 1.5, save the file.
 
-## 3. Try it locally
+## 3. Enable secure member sign-in and Messages
+
+The app uses Supabase Auth for sign-in, and the Messages page is available
+only to allowlisted group members. In Supabase **Authentication → Providers**,
+enable Email. If email confirmation is on, configure the project URL and
+redirect URLs under **Authentication → URL Configuration** to include the
+address where this app is hosted.
+
+Before members can create their own passwords, add their emails to
+`ikimina_accounts`. For the seeded contribution book, first click **Load the
+contribution book**, then run this in the Supabase SQL Editor. Review the
+addresses before authorizing them:
+
+```sql
+insert into public.ikimina_accounts (id, data)
+select
+  'acc_' || p.id,
+  jsonb_build_object(
+    'id', 'acc_' || p.id,
+    'personId', p.id,
+    'email', lower(trim(p.data->>'email')),
+    'createdAt', now()
+  )
+from public.ikimina_people p
+where coalesce(trim(p.data->>'email'), '') <> ''
+on conflict (id) do nothing;
+```
+
+For each future member, add an allowlist row from the SQL Editor, using the
+member's actual email and matching person ID:
+
+```sql
+insert into public.ikimina_accounts (id, data)
+values (
+  'acc_MEMBER_ID',
+  jsonb_build_object(
+    'id', 'acc_MEMBER_ID',
+    'personId', 'MEMBER_ID',
+    'email', lower('member@example.com'),
+    'createdAt', now()
+  )
+);
+```
+
+Never store a password or password hash in `ikimina_accounts`. Members choose
+**Set up a new secure account** on the sign-in screen and use the authorized
+email address; they may need to confirm it from their inbox before signing in.
+Their messages and image/PDF receipts are stored in a private bucket and are
+visible only to authenticated allowlisted members. Receipts remain in Messages
+and are not added to savings or contribution records. Attachments are limited
+to 10 MiB.
+
+The schema migration removes legacy `passHash` fields, makes the account
+allowlist read-only from the browser, and creates the private message table,
+bucket, and access policies. Because Supabase Auth cannot securely recover the
+old client-side passwords, all members must set a new password.
+
+## 4. Try it locally
 
 Open `index.html` in a browser (or use VS Code's Live Server — see the
 earlier instructions). Click **Sign in**, and you should land on a
@@ -107,7 +164,7 @@ and the adjustment can be cleared to restore automatic calculations.
 Signed-in sessions automatically sign out and return to the home page after
 five minutes without activity.
 
-## 4. Put it online for free
+## 5. Put it online for free
 
 Any static host works, since there's no server code. GitHub Pages
 (steps below) or Netlify's drag-and-drop deploy are both free and
@@ -124,14 +181,13 @@ take a few minutes.
 ## About security
 
 The anon key is meant to be public — it's designed to sit in
-browser-side code like this. What actually protects your group's data
-is the **Row Level Security** policy in `schema.sql`, plus the fact
-that only people you give the link to will ever open the page. This
-is the same trust model as a shared spreadsheet: fine for a known
-group of members, not a substitute for real access control if this
-ever needs to serve the general public. If that changes, the next
-step is adding Supabase Auth and tightening the policies in
-`schema.sql` so each person can only write their own rows.
+browser-side code.
+Messages and receipt files are protected by the Supabase Auth allowlist
+and Row Level Security policies in `schema.sql`. The existing ledger tables
+keep their prior shared-group access model; anyone with the project URL and
+anon key can still read or modify those tables. Do not treat the ledger's
+anon policies as protection for sensitive financial records or expose the app
+beyond the trusted group.
 
 ## Costs, honestly
 
