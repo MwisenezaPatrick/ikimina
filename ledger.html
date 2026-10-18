@@ -276,6 +276,7 @@ const DEFAULTS = {
   repaymentDays: 45, blockConcurrentLoans: true, distribution: "equal", cycleStart: "2026-06"
 };
 const LOAN_AGREEMENT_VERSION = "dashboard-terms-2026-10-17-v1";
+const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const S = {
   sb: null,
@@ -285,6 +286,8 @@ const S = {
   session: null, route: "dashboard", modal: null, period: null, reportPeriod: null,
   ledgerFor: null, toast: null, formErr: null, busy: false
 };
+let inactivityTimer = null;
+let lastActivityAt = 0;
 
 const $ = (s, r) => (r || document).querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -606,6 +609,45 @@ async function logEvent(action, detail) {
   try { await S.db.doc("events/" + id).set({ id, at: nowISO(), by: p ? p.name : "System", action, detail: detail || "" }); } catch (e) {}
 }
 function toast(m) { S.toast = m; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { S.toast = null; render(); }, 2600); }
+function endSession(returnHome) {
+  S.session = null;
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = null;
+  try { localStorage.removeItem("ikimina-session"); } catch (e) {}
+  if (returnHome) {
+    window.location.assign(new URL("index.html", window.location.href).href);
+    return;
+  }
+  render();
+}
+function scheduleInactivityTimeout() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = null;
+  if (!me()) return;
+  const remaining = SESSION_IDLE_TIMEOUT_MS - (Date.now() - lastActivityAt);
+  if (remaining <= 0) {
+    endSession(true);
+    return;
+  }
+  inactivityTimer = setTimeout(() => {
+    if (Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) endSession(true);
+    else scheduleInactivityTimeout();
+  }, remaining);
+}
+function recordActivity() {
+  if (!me()) return;
+  if (lastActivityAt && Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) {
+    endSession(true);
+    return;
+  }
+  lastActivityAt = Date.now();
+  scheduleInactivityTimeout();
+}
+function installInactivityTracking() {
+  ["pointerdown", "pointermove", "keydown", "scroll", "touchstart", "wheel", "input", "click"].forEach(type =>
+    window.addEventListener(type, recordActivity, { passive: true })
+  );
+}
 
 /* ---------- passwords ---------- */
 async function hashPw(pw) {
@@ -719,6 +761,10 @@ async function boot() {
   } catch (e) { S.dbDown = true; S.loaded = true; render(); return; }
 
   S.loaded = true; render();
+  if (me()) {
+    lastActivityAt = Date.now();
+    scheduleInactivityTimeout();
+  }
 
   const refetch = async (t) => { try { S[t] = await fetchTable(t); render(); } catch (e) {} };
   const refetchSettings = async () => { try { S.settings = await fetchSettings(); render(); } catch (e) {} };
@@ -2081,12 +2127,12 @@ async function onAct(act, el) {
     if (!ac || ac.passHash !== await hashPw(pw)) { S.formErr = "That email and password do not match an account."; render(); return; }
     S.session = ac.id;
     try { localStorage.setItem("ikimina-session", ac.id); } catch (e) {}
+    lastActivityAt = Date.now();
+    scheduleInactivityTimeout();
     S.route = "dashboard"; render(); return;
   }
   if (act === "logout") {
-    S.session = null;
-    try { localStorage.removeItem("ikimina-session"); } catch (e) {}
-    render(); return;
+    endSession(false); return;
   }
   if (act === "changepw") {
     const ac = account();
@@ -2751,6 +2797,7 @@ function wire() {
 }
 
 try { const t = localStorage.getItem("ikimina-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+installInactivityTracking();
 boot();
 
 

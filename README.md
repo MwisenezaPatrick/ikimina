@@ -104,6 +104,8 @@ repayments from the loan row's **Delete request** action. On Rate contributions,
 officers can manually set a member's displayed penalty accrued and rate
 contributions received totals; this does not create or change a cash payment,
 and the adjustment can be cleared to restore automatic calculations.
+Signed-in sessions automatically sign out and return to the home page after
+five minutes without activity.
 
 ## 4. Put it online for free
 
