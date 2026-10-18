@@ -2570,6 +2570,51 @@ async function createLoanAgreementPdf(loan) {
   field("Accepted terms version", acceptance.agreementVersion || "Not recorded");
   write("The member accepted electronically while signed in. This record documents the account, date, and application reference; it is not a copied or drawn signature image.", 9, regular, 12);
 
+  const signaturePage = pdf.addPage([595.28, 841.89]);
+  const signatureItalic = await pdf.embedFont(lib.StandardFonts.HelveticaOblique);
+  signaturePage.drawText("AGREEMENT SIGNATURES AND APPROVALS", {
+    x: margin, y: 778, size: 16, font: bold, color: ink
+  });
+  signaturePage.drawText(pdfSafeText((loan.number || "Draft") + " | " + (p.name || "Member")), {
+    x: margin, y: 756, size: 9.5, font: regular, color: ink
+  });
+  signaturePage.drawText("Electronic signatures are the names recorded when the member accepted and officers approved this loan.", {
+    x: margin, y: 735, size: 9, font: regular, color: ink
+  });
+
+  const signatureBlock = (title, fullName, signatureName, dateLabel, signedAt, top) => {
+    const nameText = pdfSafeText(fullName || "Not recorded");
+    const signatureText = pdfSafeText(signatureName || "Awaiting signature");
+    signaturePage.drawText(pdfSafeText(title), { x: margin, y: top, size: 11, font: bold, color: ink });
+    signaturePage.drawText(pdfSafeText(title + " full name: " + nameText), {
+      x: margin, y: top - 20, size: 9.5, font: regular, color: ink
+    });
+    signaturePage.drawText("Signature (electronic):", {
+      x: margin, y: top - 47, size: 8, font: regular, color: ink
+    });
+    signaturePage.drawLine({
+      start: { x: margin, y: top - 70 }, end: { x: margin + 330, y: top - 70 },
+      thickness: 0.7, color: ink
+    });
+    let signatureSize = 12;
+    while (signatureSize > 8 && signatureItalic.widthOfTextAtSize(signatureText, signatureSize) > 315) signatureSize -= 0.5;
+    signaturePage.drawText(signatureText, {
+      x: margin + 3, y: top - 67, size: signatureSize, font: signatureItalic, color: ink
+    });
+    signaturePage.drawText(pdfSafeText(dateLabel + ": " + (signedAt ? fmtDate(signedAt) : "Awaiting approval")), {
+      x: margin + 354, y: top - 66, size: 8.5, font: regular, color: ink
+    });
+  };
+  signatureBlock("Member", p.name || "Not recorded",
+    acceptance.acceptedAt ? (acceptance.acceptedByName || p.name) : null,
+    "Date signed", acceptance.acceptedAt, 690);
+  for (let i = 0; i < approvalLabels.length; i++) {
+    const [key, title] = approvalLabels[i];
+    const stamp = approvals[key];
+    signatureBlock(title, stamp && stamp.name, stamp && stamp.name,
+      "Date approved", stamp && stamp.at, 550 - i * 145);
+  }
+
   pdf.setTitle((loan.number || "Draft") + " Loan Agreement - " + (p.name || "Member"));
   pdf.setSubject("IKIMINA loan terms and member acceptance record");
   pdf.setCreator("Ikimina Savings & Loan dashboard");
