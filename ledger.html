@@ -158,15 +158,6 @@ input:disabled{opacity:.6}
 .err{font-size:13px;color:var(--red);background:var(--red-bg);border-radius:8px;padding:9px 11px;margin-bottom:12px}
 .empty{padding:34px 16px;text-align:center;color:var(--ink-3);font-size:14px}
 .empty b{display:block;color:var(--ink);font-family:Fraunces;font-size:17px;margin-bottom:5px;font-weight:600}
-.message-list{display:flex;flex-direction:column;gap:12px;max-height:65vh;overflow:auto;padding:16px}
-.message{max-width:min(720px,92%);padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card-2)}
-.message.mine{align-self:flex-end;background:var(--green-bg)}
-.message-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:5px}
-.message-body{white-space:pre-wrap;overflow-wrap:anywhere}
-.message-attachment{display:block;margin-top:9px;overflow-wrap:anywhere}
-.message-attachment img{display:block;max-width:min(400px,100%);max-height:320px;object-fit:contain;border-radius:7px;margin-top:6px}
-.message-composer{padding:16px;border-top:1px solid var(--line)}
-.message-composer textarea{width:100%;min-height:90px;resize:vertical}
 
 /* ---------- loan chain / agreement ---------- */
 .chain{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 0}
@@ -291,17 +282,12 @@ const S = {
   sb: null,
   loaded: false, dbDown: false, configMissing: false, readOnly: false,
   settings: null, people: [], savings: [], loans: [], repayments: [],
-  payouts: [], events: [], accounts: [], fees: [], messages: [],
-  authUser: null, authMode: "login", authNotice: "", fileLinkError: "",
-  messageFileUrls: {}, messageChannel: null, messageError: "",
+  payouts: [], events: [], accounts: [], fees: [],
   session: null, route: "dashboard", modal: null, period: null, reportPeriod: null,
   ledgerFor: null, toast: null, formErr: null, busy: false
 };
 let inactivityTimer = null;
 let lastActivityAt = 0;
-let messageFileLinksLoading = false;
-const MESSAGE_BUCKET = "ikimina-message-files";
-const MESSAGE_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const $ = (s, r) => (r || document).querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -322,8 +308,7 @@ function periodRange(from, to) { const o = []; let p = from, g = 0; while (p <= 
 
 const cfg = () => Object.assign({}, DEFAULTS, S.settings || {});
 const personById = id => S.people.find(p => p.id === id) || null;
-const account = () => S.accounts.find(a => a.id === S.session &&
-  (!S.authUser || (a.email || "").toLowerCase() === (S.authUser.email || "").toLowerCase())) || null;
+const account = () => S.accounts.find(a => a.id === S.session) || null;
 const me = () => { const a = account(); return a ? personById(a.personId) : null; };
 const roleOf = p => {
   if (!p) return "member";
@@ -624,18 +609,8 @@ async function logEvent(action, detail) {
   try { await S.db.doc("events/" + id).set({ id, at: nowISO(), by: p ? p.name : "System", action, detail: detail || "" }); } catch (e) {}
 }
 function toast(m) { S.toast = m; render(); clearTimeout(toast._t); toast._t = setTimeout(() => { S.toast = null; render(); }, 2600); }
-async function endSession(returnHome) {
-  if (S.sb) {
-    const { error } = await S.sb.auth.signOut({ scope: "local" });
-    if (error) throw error;
-  }
+function endSession(returnHome) {
   S.session = null;
-  S.authUser = null;
-  S.messages = [];
-  S.messageFileUrls = {};
-  S.messageError = "";
-  if (S.messageChannel && S.sb) await S.sb.removeChannel(S.messageChannel);
-  S.messageChannel = null;
   if (inactivityTimer) clearTimeout(inactivityTimer);
   inactivityTimer = null;
   try { localStorage.removeItem("ikimina-session"); } catch (e) {}
@@ -651,29 +626,18 @@ function scheduleInactivityTimeout() {
   if (!me()) return;
   const remaining = SESSION_IDLE_TIMEOUT_MS - (Date.now() - lastActivityAt);
   if (remaining <= 0) {
-    endSession(true).catch(error => {
-      S.formErr = "Automatic sign-out failed: " + error.message;
-      render();
-    });
+    endSession(true);
     return;
   }
   inactivityTimer = setTimeout(() => {
-    if (Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) {
-      endSession(true).catch(error => {
-        S.formErr = "Automatic sign-out failed: " + error.message;
-        render();
-      });
-    }
+    if (Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) endSession(true);
     else scheduleInactivityTimeout();
   }, remaining);
 }
 function recordActivity() {
   if (!me()) return;
   if (lastActivityAt && Date.now() - lastActivityAt >= SESSION_IDLE_TIMEOUT_MS) {
-    endSession(true).catch(error => {
-      S.formErr = "Automatic sign-out failed: " + error.message;
-      render();
-    });
+    endSession(true);
     return;
   }
   lastActivityAt = Date.now();
@@ -684,88 +648,25 @@ function installInactivityTracking() {
     window.addEventListener(type, recordActivity, { passive: true })
   );
 }
-function watchMessageUpdates() {
-  if (!S.sb || !S.authUser || S.messageChannel) return;
-  S.messageChannel = S.sb.channel("ikimina-messages-" + S.authUser.id);
-  S.messageChannel.on("postgres_changes", {
-    event: "*", schema: "public", table: "ikimina_messages"
-  }, async () => {
-    try {
-      S.messages = await fetchTable("messages");
-      render();
-    } catch (error) {
-      S.fileLinkError = "Messages could not be refreshed: " + error.message;
-      render();
-    }
-  });
-  S.messageChannel.subscribe();
-}
-async function signInMember(email, password, createAccount) {
-  if (!S.sb) throw new Error("The database is not connected.");
-  if (!S.accounts.some(item => (item.email || "").toLowerCase() === email)) {
-    throw new Error("This email is not enabled for the group. Ask an officer to add it to the member sign-in allowlist.");
-  }
-  let user;
-  if (createAccount) {
-    if (password.length < 8) throw new Error("Use a password with at least 8 characters.");
-    const { data, error } = await S.sb.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: window.location.href.split("#")[0] }
-    });
-    if (error) throw error;
-    user = data.user;
-    if (!data.session) {
-      S.authNotice = "Check your email to confirm your secure account, then return here to sign in.";
-      S.authMode = "login";
-      render();
-      return false;
-    }
-  } else {
-    const { data, error } = await S.sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    user = data.user;
-  }
-  if (!user || (user.email || "").toLowerCase() !== email) {
-    throw new Error("Supabase did not confirm the member email for this session.");
-  }
-  const accounts = await fetchTable("accounts");
-  const memberAccount = accounts.find(item => (item.email || "").toLowerCase() === email);
-  if (!memberAccount) {
-    const { error } = await S.sb.auth.signOut({ scope: "local" });
-    if (error) throw error;
-    throw new Error("This email is not enabled for the group.");
-  }
-  const messages = await fetchTable("messages");
-  S.authUser = user;
-  S.accounts = accounts;
-  S.session = memberAccount.id;
-  S.messages = messages;
-  S.messageFileUrls = {};
-  S.fileLinkError = "";
-  S.messageError = "";
-  S.authNotice = "";
-  S.authMode = "login";
-  S.route = "dashboard";
-  lastActivityAt = Date.now();
-  scheduleInactivityTimeout();
-  watchMessageUpdates();
-  render();
-  return true;
-}
 
 /* ---------- passwords ---------- */
+async function hashPw(pw) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ikimina:" + pw));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
 /* ============================================================
    Seed — the contribution book
    ============================================================ */
 const BOOK = [
-  { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", loan: 270000, interestPaid: 8100 },
-  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", loan: 560000, interestPaid: 16800 },
-  { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", loan: 270000 },
-  { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", loan: 0, rateFee: { amount: 250, at: "2026-10-17" } },
-  { id: "chadia", name: "Chadia", monthly: 25000, role: "vice_president", email: "chadia@ikimina.rw", loan: 0 },
-  { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", loan: 0 },
-  { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", loan: 0 },
-  { id: "patrick", name: "Patrick", monthly: 25000, role: "secretary", email: "patrick@gmail.com", loan: 0, rateFee: { amount: 250, at: "2026-10-16" } }
+  { id: "jules", name: "Jules", monthly: 50000, role: "president", email: "ndikumukizajules1@gmail.com", pw: "Ndikumukiza", loan: 270000, interestPaid: 8100 },
+  { id: "candide", name: "Candide", monthly: 50000, role: "member", email: "candide@ikimina.rw", pw: "Candide", loan: 560000, interestPaid: 16800 },
+  { id: "eric", name: "Eric", monthly: 50000, role: "member", email: "eric@ikimina.rw", pw: "Eric", loan: 270000 },
+  { id: "deborah", name: "Deborah", monthly: 25000, role: "member", email: "deborah@ikimina.rw", pw: "Deborah", loan: 0, rateFee: { amount: 250, at: "2026-10-17" } },
+  { id: "chadia", name: "Chadia", monthly: 25000, role: "vice_president", email: "chadia@ikimina.rw", pw: "Chadia", loan: 0 },
+  { id: "ramathan", name: "Ramathan", monthly: 25000, role: "member", email: "ramathan@ikimina.rw", pw: "Ramathan", loan: 0 },
+  { id: "charlotte", name: "Charlotte", monthly: 25000, role: "member", email: "charlotte@ikimina.rw", pw: "Charlotte", loan: 0 },
+  { id: "patrick", name: "Patrick", monthly: 25000, role: "secretary", email: "patrick@gmail.com", pw: "Patrick", loan: 0, rateFee: { amount: 250, at: "2026-10-16" } }
 ];
 const BOOK_MONTHS = ["2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
 const BOOK_CHARGEABLE_DAYS_AS_OF = "2026-10-17";
@@ -781,6 +682,10 @@ async function seedBook() {
     await put("people/" + b.id, {
       id: b.id, name: b.name, monthly: b.monthly, role: b.role, status: "active",
       joined: "2026-06", phone: "", email: b.email, createdAt: nowISO()
+    });
+    await put("accounts/acc_" + b.id, {
+      id: "acc_" + b.id, personId: b.id, email: b.email.toLowerCase(),
+      passHash: await hashPw(b.pw), createdAt: nowISO()
     });
     for (const m of BOOK_MONTHS) {
       if (m === "2026-10" && ["eric", "charlotte"].includes(b.id)) continue;
@@ -819,10 +724,6 @@ async function seedBook() {
     }
   }
   await logEvent("setup", "Contribution book loaded: 8 members, Jun\u2013Oct 2026");
-  S.settings = await fetchSettings();
-  for (const table of TABLES) {
-    if (table !== "messages") S[table] = await fetchTable(table);
-  }
   S.busy = false;
   toast("Contribution book loaded");
 }
@@ -830,7 +731,7 @@ async function seedBook() {
 /* ============================================================
    Boot
    ============================================================ */
-const TABLES = ["people", "savings", "loans", "repayments", "payouts", "events", "accounts", "fees", "messages"];
+const TABLES = ["people", "savings", "loans", "repayments", "payouts", "events", "accounts", "fees"];
 
 async function fetchTable(name) {
   const { data, error } = await S.sb.from("ikimina_" + name).select("data");
@@ -845,6 +746,7 @@ async function fetchSettings() {
 
 async function boot() {
   S.period = thisPeriod();
+  try { S.session = localStorage.getItem("ikimina-session"); } catch (e) {}
 
   if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY || window.SUPABASE_URL.indexOf("YOUR-PROJECT") >= 0) {
     S.configMissing = true; S.loaded = true; render(); return;
@@ -854,26 +756,8 @@ async function boot() {
   S.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
   try {
-    const { data: authData, error: authError } = await S.sb.auth.getSession();
-    if (authError) throw authError;
-    S.authUser = authData.session ? authData.session.user : null;
     S.settings = await fetchSettings();
-    for (const t of TABLES) {
-      if (t !== "messages") S[t] = await fetchTable(t);
-    }
-    if (S.authUser) {
-      const signedInAccount = S.accounts.find(a =>
-        (a.email || "").toLowerCase() === (S.authUser.email || "").toLowerCase());
-      if (!signedInAccount) {
-        const { error } = await S.sb.auth.signOut({ scope: "local" });
-        if (error) throw error;
-        S.authUser = null;
-        S.authNotice = "This email is not enabled for this group. Ask an officer to add it to the member sign-in allowlist.";
-      } else {
-        S.session = signedInAccount.id;
-        S.messages = await fetchTable("messages");
-      }
-    }
+    for (const t of TABLES) S[t] = await fetchTable(t);
   } catch (e) { S.dbDown = true; S.loaded = true; render(); return; }
 
   S.loaded = true; render();
@@ -887,11 +771,10 @@ async function boot() {
 
   const ch = S.sb.channel("ikimina-live");
   ch.on("postgres_changes", { event: "*", schema: "public", table: "ikimina_config" }, refetchSettings);
-  TABLES.filter(t => t !== "messages").forEach(t => {
+  TABLES.forEach(t => {
     ch.on("postgres_changes", { event: "*", schema: "public", table: "ikimina_" + t }, () => refetch(t));
   });
   ch.subscribe();
-  watchMessageUpdates();
 }
 
 /* ============================================================
@@ -943,14 +826,14 @@ function navFor(role) {
   if (role === "member") return [
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
     { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
-    { k: "messages", label: "Messages" }, { k: "earnings", label: "Earnings" }, { k: "request", label: "Request a loan", ask: true },
+    { k: "earnings", label: "Earnings" }, { k: "request", label: "Request a loan", ask: true },
     { k: "profile", label: "Profile" }
   ];
   return [
     { k: "dashboard", label: "Dashboard" }, { k: "members", label: "Members" },
     { k: "savings", label: "Savings" }, { k: "rates", label: "Rate contributions" }, { k: "loans", label: "Loans" },
     { k: "requested", label: "Requested Loan" }, { k: "reports", label: "Reports" },
-    { k: "earnings", label: "Earnings" }, { k: "messages", label: "Messages" },
+    { k: "earnings", label: "Earnings" },
     ...(role === "president" ? [{ k: "expenses", label: "Expenses" }] : []),
     { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
   ];
@@ -967,7 +850,7 @@ function render() {
     root.innerHTML = '<div class="shell"><main><div class="panel"><div class="empty"><b>The ledger could not reach its database</b>Check that the Supabase URL and key are correct, that the schema has been run, and that you have a connection, then reload.</div></div></main></div>';
     return;
   }
-  if (!S.people.length && !S.accounts.length) { root.innerHTML = seedView(); $("#layer").innerHTML = ""; wire(); return; }
+  if (!S.accounts.length) { root.innerHTML = seedView(); $("#layer").innerHTML = ""; wire(); return; }
   if (!me()) { root.innerHTML = loginView(); $("#layer").innerHTML = ""; wire(); return; }
 
   const c = cfg(), n = actionCount(), nav = navFor(myRole());
@@ -987,9 +870,6 @@ function render() {
     (S.toast ? '<div class="toast">' + esc(S.toast) + '</div>' : "");
   $("#layer").innerHTML = S.modal ? modalView() : "";
   wire();
-  const messageList = $("#message_list");
-  if (messageList) messageList.scrollTop = messageList.scrollHeight;
-  if (S.route === "messages") loadMessageFileLinks();
 }
 
 function whoAmI() {
@@ -1009,7 +889,6 @@ function page() {
     case "requested": return requestedLoansView();
     case "reports": return reportsView();
     case "earnings": return earningsView();
-    case "messages": return messagesView();
     case "expenses": return expensesView();
     case "profile": return profileView();
     case "settings": return settingsView();
@@ -1025,7 +904,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
-    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest credited for Jules (RWF 8,100) and Candide (RWF 16,800), Deborah\u2019s and Patrick\u2019s RWF 250 October rate contributions, and the October payment dates. A database administrator must then authorize member email addresses for secure sign-in.</p>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest credited for Jules (RWF 8,100) and Candide (RWF 16,800), Deborah\u2019s and Patrick\u2019s RWF 250 October rate contributions, and the October payment dates. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
 }
@@ -1034,17 +913,12 @@ function loginView() {
   return '<div class="shell" style="grid-template-columns:1fr;max-width:420px"><main>' +
     '<div class="brand" style="margin:30px 0 22px"><span class="mark"></span><div><h1>' + esc(cfg().groupName) + '</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
-    '<h3 style="margin-bottom:14px">' + (S.authMode === "setup" ? "Set up secure sign-in" : "Sign in") + '</h3>' +
+    '<h3 style="margin-bottom:14px">Sign in</h3>' +
     (S.formErr ? '<div class="err">' + esc(S.formErr) + '</div>' : "") +
-    (S.authNotice ? '<p class="hint">' + esc(S.authNotice) + '</p>' : "") +
-    '<label class="f"><span>Member email</span><input type="email" id="li_email" autocomplete="username" placeholder="you@example.com" required></label>' +
-    '<label class="f"><span>Password</span><input type="password" id="li_pw" autocomplete="' + (S.authMode === "setup" ? "new-password" : "current-password") + '" data-act="loginkey" minlength="8" required></label>' +
-    '<button class="btn primary" data-act="login" style="width:100%;justify-content:center">' + (S.authMode === "setup" ? "Create secure account" : "Sign in") + '</button>' +
-    '<button class="btn" data-act="auth-mode" data-mode="' + (S.authMode === "setup" ? "login" : "setup") + '" style="width:100%;justify-content:center;margin-top:10px">' +
-      (S.authMode === "setup" ? "Back to sign in" : "Set up a new secure account") + '</button>' +
-    '<p class="hint" style="margin:14px 0 0">' +
-      (S.authMode === "setup" ? "Use the email address registered for you by the group. You may need to confirm it from your email before signing in." : "First-time users must set up a new secure password. Ask an officer if your email is not authorized.") +
-    '</p>' +
+    '<label class="f"><span>Email</span><input type="text" id="li_email" autocomplete="username" placeholder="you@example.com"></label>' +
+    '<label class="f"><span>Password</span><input type="password" id="li_pw" autocomplete="current-password" data-act="loginkey"></label>' +
+    '<button class="btn primary" data-act="login" style="width:100%;justify-content:center">Sign in</button>' +
+    '<p class="hint" style="margin:14px 0 0">Ask an admin if you have forgotten your password. They can set a new one for you from the members list.</p>' +
     '</div></div></main></div>';
 }
 
@@ -1306,104 +1180,6 @@ function savingsView() {
             '<button class="btn small" data-act="savefull" data-id="' + p.id + '">Full</button>' +
             '<button class="btn small primary" data-act="saverow" data-id="' + p.id + '">Save</button>' : "") + '</div></td>' : "") + '</tr>';
       }).join("") + '</tbody></table></div>' : '<div class="empty">No members yet.</div>') + '</section>';
-}
-
-function messageAttachmentView(message) {
-  const attachment = message.attachment;
-  if (!attachment) return "";
-  const cached = S.messageFileUrls[attachment.path];
-  if (!cached || cached.expiresAt <= Date.now()) {
-    return '<div class="message-attachment mini">' + esc(attachment.name) + ' · Preparing secure link…</div>';
-  }
-  const preview = attachment.type.indexOf("image/") === 0
-    ? '<img src="' + esc(cached.url) + '" alt="' + esc(attachment.name) + '" loading="lazy">' : "";
-  return '<a class="message-attachment" href="' + esc(cached.url) + '" target="_blank" rel="noopener">' +
-    esc(attachment.name) + ' · ' + num(Math.ceil(attachment.size / 1024)) + ' KB' + preview + '</a>';
-}
-function messagesView() {
-  const ordered = S.messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
-  return '<div class="pagehead"><div><h2>Messages</h2><p>Group chat and deposit receipts shared by members. Receipts stay in this message page and do not change contribution records.</p></div></div>' +
-    '<section class="panel">' +
-      '<div class="message-list" id="message_list">' +
-        (ordered.length ? ordered.map(message => {
-          const own = S.authUser && message.senderAuthId === S.authUser.id;
-          return '<article class="message' + (own ? ' mine' : '') + '"><div class="message-head"><b>' + esc(message.senderName || "Member") +
-            '</b><span class="mini">' + fmtDate(message.createdAt) + ' ' + esc((message.createdAt || "").slice(11, 16)) + '</span></div>' +
-            (message.text ? '<div class="message-body">' + esc(message.text) + '</div>' : "") +
-            messageAttachmentView(message) + '</article>';
-        }).join("") : '<div class="empty">No messages yet. Start the conversation or share a deposit receipt.</div>') +
-      '</div>' +
-      (S.fileLinkError ? '<p class="err" style="margin:12px 16px">' + esc(S.fileLinkError) + '</p>' : "") +
-      (S.messageError ? '<p class="err" style="margin:12px 16px">' + esc(S.messageError) + '</p>' : "") +
-      '<div class="message-composer">' +
-        '<label class="f"><span>Message</span><textarea id="message_text" maxlength="2000" placeholder="Write a message"></textarea></label>' +
-        '<div class="inline"><label class="f"><span>Attach receipt (image or PDF, max 10 MB)</span><input type="file" id="message_file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"></label>' +
-        '<button class="btn primary" data-act="send-message"' + (S.busy ? ' disabled' : '') + '>Send message</button></div>' +
-      '</div>' +
-    '</section>';
-}
-async function sendMessage() {
-  if (!S.authUser || !S.sb) throw new Error("Sign in to send a message.");
-  const text = val("message_text");
-  const input = $("#message_file"), file = input && input.files && input.files[0];
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
-  if (!text && !file) throw new Error("Write a message or attach a receipt.");
-  if (text.length > 2000) throw new Error("Messages must be 2,000 characters or fewer.");
-  if (file && !allowedTypes.includes(file.type)) throw new Error("Attach a JPEG, PNG, WebP, GIF, or PDF file.");
-  if (file && file.size > MESSAGE_MAX_FILE_BYTES) throw new Error("Attachments must be 10 MB or smaller.");
-
-  const messageId = uid(), now = nowISO();
-  let attachment = null, uploadedPath = null;
-  if (file) {
-    const extension = file.name.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
-    const path = S.authUser.id + "/" + messageId + (extension ? "." + extension : "");
-    const { error } = await S.sb.storage.from(MESSAGE_BUCKET).upload(path, file, {
-      contentType: file.type, upsert: false
-    });
-    if (error) throw error;
-    uploadedPath = path;
-    attachment = { path, name: file.name.slice(0, 255), type: file.type, size: file.size };
-  }
-  const message = {
-    id: messageId, senderAuthId: S.authUser.id, senderEmail: S.authUser.email,
-    senderName: (me() && me().name) || S.authUser.email, text, attachment, createdAt: now
-  };
-  const { error } = await S.sb.from("ikimina_messages").insert({
-    id: messageId, data: message, updated_at: now
-  });
-  if (error) {
-    if (uploadedPath) {
-      const { error: cleanupError } = await S.sb.storage.from(MESSAGE_BUCKET).remove([uploadedPath]);
-      if (cleanupError) {
-        throw new Error("The message could not be saved, and its uploaded attachment could not be removed: " + cleanupError.message);
-      }
-    }
-    throw error;
-  }
-  if (!S.messages.some(item => item.id === message.id)) S.messages.push(message);
-  S.messageError = "";
-}
-async function loadMessageFileLinks() {
-  if (messageFileLinksLoading || S.route !== "messages" || !S.authUser || !S.sb) return;
-  messageFileLinksLoading = true;
-  const previousError = S.fileLinkError;
-  let changed = false;
-  try {
-    for (const message of S.messages) {
-      const file = message.attachment;
-      if (!file || (S.messageFileUrls[file.path] && S.messageFileUrls[file.path].expiresAt > Date.now() + 60000)) continue;
-      const { data, error } = await S.sb.storage.from(MESSAGE_BUCKET).createSignedUrl(file.path, 3600);
-      if (error) throw error;
-      S.messageFileUrls[file.path] = { url: data.signedUrl, expiresAt: Date.now() + 3540000 };
-      changed = true;
-    }
-    S.fileLinkError = "";
-  } catch (error) {
-    S.fileLinkError = "A receipt could not be opened securely: " + error.message;
-  } finally {
-    messageFileLinksLoading = false;
-  }
-  if (changed || previousError !== S.fileLinkError) render();
 }
 
 function rateContributionsView() {
@@ -1748,11 +1524,12 @@ function profileView() {
     '<section class="panel"><header><div><h3>Your savings</h3></div></header><div class="body">' +
       cols(lastMonths(8).map(m => ({ label: fmtPeriodShort(m), value: savingsFor(p.id, m), target: memberSince(p) <= m ? monthlyOf(p) : 0 }))) +
     '</div></section></div>' +
-    (isAdmin() ? '<section class="panel"><header><div><h3>Authorized member emails</h3>' +
-      '<p>Account access is provisioned in Supabase, not by setting passwords in this page.</p></div></header><div class="scroll"><table><thead><tr>' +
-      '<th>Member</th><th>Email</th><th>Role</th></tr></thead><tbody>' +
+    (isAdmin() ? '<section class="panel"><header><div><h3>Sign-in accounts</h3>' +
+      '<p>Everyone who can open this ledger.</p></div></header><div class="scroll"><table><thead><tr>' +
+      '<th>Member</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' +
       S.accounts.map(ac => { const pp = personById(ac.personId) || {}; return '<tr><td class="name">' + esc(pp.name || "\u2014") + '</td>' +
-        '<td class="mini">' + esc(ac.email) + '</td><td class="mini">' + esc(roleLabel(roleOf(pp))) + '</td></tr>';
+        '<td class="mini">' + esc(ac.email) + '</td><td class="mini">' + esc(roleLabel(roleOf(pp))) + '</td>' +
+        '<td class="num">' + (canWrite() ? '<button class="btn small" data-act="modal" data-m="resetpw" data-id="' + ac.id + '">Reset password</button>' : "") + '</td></tr>';
       }).join("") + '</tbody></table></div></section>' : "");
 }
 
@@ -1789,7 +1566,7 @@ function modalView() {
   const m = S.modal;
   const f = { member: memberModal, "savings-quick": quickSaveModal, request: requestModal, loan: loanModal,
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
-    editme: editMeModal, password: passwordModal, "rate-payments": ratePaymentsModal,
+    editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal,
     "rate-adjustment": rateAdjustmentModal, "cash-expense": cashExpenseModal,
     "book-corrections": bookCorrectionsModal, "cash-balance": cashBalanceModal }[m.m];
   if (!f) return "";
@@ -1806,14 +1583,15 @@ function memberModal(m) {
     title: p ? "Edit " + esc(p.name) : "Add a member",
     body: '<div class="inline"><label class="f"><span>Full name</span><input type="text" id="m_name" value="' + esc(p ? p.name : "") + '"></label>' +
       '<label class="f"><span>Monthly saving</span><input type="number" id="m_monthly" value="' + (p ? monthlyOf(p) : cfg().monthlyContribution) + '"></label></div>' +
-      '<div class="inline"><label class="f"><span>Member email</span><input type="email" id="m_email" value="' + esc(p && p.email ? p.email : "") + '"></label>' +
+      '<div class="inline"><label class="f"><span>Email for signing in</span><input type="text" id="m_email" value="' + esc(p && p.email ? p.email : "") + '"></label>' +
       '<label class="f"><span>Phone</span><input type="text" id="m_phone" value="' + esc(p && p.phone ? p.phone : "") + '" placeholder="Optional"></label></div>' +
       '<div class="inline"><label class="f"><span>Saving since</span><input type="month" id="m_joined" value="' + (p ? memberSince(p) : cfg().cycleStart) + '"></label>' +
       '<label class="f"><span>Role</span><select id="m_role">' + ["member", "president", "vice_president", "secretary"].map(r =>
         '<option value="' + r + '"' + (p && roleOf(p) === r ? " selected" : "") + '>' + roleLabel(r) + '</option>').join("") + '</select></label>' +
       '<label class="f"><span>Status</span><select id="m_status"><option value="active"' + (!p || p.status !== "inactive" ? " selected" : "") + '>Active</option>' +
         '<option value="inactive"' + (p && p.status === "inactive" ? " selected" : "") + '>Inactive</option></select></label></div>' +
-      '<p class="hint">Authorize this member’s sign-in email separately in Supabase. Members set their own password from the sign-in page. A loan needs approval from the President, Vice President, and Secretary in order. An officer may approve a stage assigned to their current role, but nobody may approve their own loan.</p>',
+      (p ? "" : '<label class="f"><span>First password</span><input type="text" id="m_pw" placeholder="They can change it later"></label>') +
+      '<p class="hint">A loan needs approval from the President, Vice President, and Secretary in order. An officer may approve a stage assigned to their current role, but nobody may approve their own loan.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button>' +
       '<button class="btn primary" data-act="savemember" data-id="' + (p ? p.id : "") + '">' + (p ? "Save changes" : "Add member") + '</button>'
   };
@@ -1832,11 +1610,22 @@ function editMeModal() {
 function passwordModal() {
   return {
     title: "Change password",
-    body: '<label class="f"><span>New password</span><input type="password" id="pw_new" minlength="8" autocomplete="new-password"></label>' +
-      '<label class="f"><span>New password again</span><input type="password" id="pw_new2" minlength="8" autocomplete="new-password"></label>',
+    body: '<label class="f"><span>Current password</span><input type="password" id="pw_old"></label>' +
+      '<label class="f"><span>New password</span><input type="password" id="pw_new"></label>' +
+      '<label class="f"><span>New password again</span><input type="password" id="pw_new2"></label>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="changepw">Change it</button>'
   };
 }
+function resetPwModal(m) {
+  const ac = S.accounts.find(a => a.id === m.id), p = ac ? personById(ac.personId) : null;
+  return {
+    title: "Reset password",
+    body: '<p class="mini" style="margin-top:0">Set a new password for ' + esc(p ? p.name : "") + '. Tell them what it is, and ask them to change it.</p>' +
+      '<label class="f"><span>New password</span><input type="text" id="rp_new"></label>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="doreset" data-id="' + m.id + '">Set password</button>'
+  };
+}
+
 function quickSaveModal(m) {
   const people = activePeople();
   const pick = m.id || (people[0] && people[0].id);
@@ -2334,52 +2123,33 @@ async function onAct(act, el) {
   /* ---- auth ---- */
   if (act === "login") {
     const email = val("li_email").toLowerCase(), pw = $("#li_pw") ? $("#li_pw").value : "";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !pw) {
-      S.formErr = "Enter a valid member email and password."; render(); return;
-    }
-    try {
-      await signInMember(email, pw, S.authMode === "setup");
-    } catch (error) {
-      S.formErr = error.message || "Secure sign-in failed.";
-      render();
-    }
-    return;
-  }
-  if (act === "auth-mode") {
-    S.authMode = el.getAttribute("data-mode") === "setup" ? "setup" : "login";
-    S.formErr = null;
-    render();
-    return;
+    const ac = S.accounts.find(a => (a.email || "").toLowerCase() === email);
+    if (!ac || ac.passHash !== await hashPw(pw)) { S.formErr = "That email and password do not match an account."; render(); return; }
+    S.session = ac.id;
+    try { localStorage.setItem("ikimina-session", ac.id); } catch (e) {}
+    lastActivityAt = Date.now();
+    scheduleInactivityTimeout();
+    S.route = "dashboard"; render(); return;
   }
   if (act === "logout") {
-    try { await endSession(false); } catch (error) {
-      S.formErr = "Sign-out failed: " + error.message;
-      render();
-    }
-    return;
-  }
-  if (act === "send-message") {
-    if (S.busy) return;
-    S.busy = true;
-    el.disabled = true;
-    try {
-      await sendMessage();
-    } catch (error) {
-      S.messageError = error.message || "The message could not be sent.";
-    } finally {
-      S.busy = false;
-      render();
-    }
-    return;
+    endSession(false); return;
   }
   if (act === "changepw") {
-    if (!S.authUser) { S.formErr = "Sign in securely before changing your password."; render(); return; }
+    const ac = account();
+    if (ac.passHash !== await hashPw($("#pw_old").value)) { S.formErr = "Your current password is not right."; render(); return; }
     const a = $("#pw_new").value, b = $("#pw_new2").value;
-    if (a.length < 8) { S.formErr = "Use at least eight characters."; render(); return; }
+    if (a.length < 4) { S.formErr = "Use at least four characters."; render(); return; }
     if (a !== b) { S.formErr = "The two new passwords are different."; render(); return; }
-    const { error } = await S.sb.auth.updateUser({ password: a });
-    if (error) { S.formErr = error.message; render(); return; }
+    await put("accounts/" + ac.id, Object.assign({}, ac, { passHash: await hashPw(a) }));
     S.modal = null; toast("Password changed"); return;
+  }
+  if (act === "doreset") {
+    const ac = S.accounts.find(x => x.id === id);
+    const npw = val("rp_new");
+    if (!ac || npw.length < 4) { S.formErr = "Use at least four characters."; render(); return; }
+    await put("accounts/" + ac.id, Object.assign({}, ac, { passHash: await hashPw(npw) }));
+    await logEvent("account", "Password reset for " + ((personById(ac.personId) || {}).name || ""));
+    S.modal = null; toast("Password set"); return;
   }
   if (act === "saveme") {
     const p = me();
@@ -2392,29 +2162,14 @@ async function onAct(act, el) {
     if (S.accounts.some(other => other.id !== ac.id && (other.email || "").toLowerCase() === email)) {
       S.formErr = "That email address is already used by another account."; render(); return;
     }
-    if (email !== (S.authUser.email || "").toLowerCase()) {
-      const { data, error } = await S.sb.auth.updateUser({ email });
-      if (error) { S.formErr = error.message; render(); return; }
-      if ((data.user.email || "").toLowerCase() !== email) {
-        await put("people/" + p.id, Object.assign({}, p, {
-          name: val("e_name") || p.name, phone: val("e_phone")
-        }));
-        p.name = val("e_name") || p.name;
-        p.phone = val("e_phone");
-        S.modal = null;
-        S.authNotice = "A confirmation email was sent to " + email + ". Confirm it, then sign in with the new address.";
-        await endSession(false);
-        return;
-      }
-      S.authUser = data.user;
-      S.accounts = await fetchTable("accounts");
-    }
     await put("people/" + p.id, Object.assign({}, p, {
       name: val("e_name") || p.name, email, phone: val("e_phone")
     }));
+    await put("accounts/" + ac.id, Object.assign({}, ac, { email }));
     p.name = val("e_name") || p.name;
     p.email = email;
     p.phone = val("e_phone");
+    ac.email = email;
     S.modal = null; toast("Saved"); return;
   }
 
@@ -2429,6 +2184,15 @@ async function onAct(act, el) {
       monthly: valn("m_monthly") || cfg().monthlyContribution,
       joined: val("m_joined") || thisPeriod(), createdAt: old ? old.createdAt : nowISO()
     }));
+    if (email) {
+      const existing = S.accounts.find(a => a.personId === pid);
+      if (existing) await put("accounts/" + existing.id, Object.assign({}, existing, { email }));
+      else {
+        const pw = val("m_pw") || name.split(" ")[0];
+        const aid = "acc_" + pid;
+        await put("accounts/" + aid, { id: aid, personId: pid, email, passHash: await hashPw(pw), createdAt: nowISO() });
+      }
+    }
     await logEvent("member", (old ? "Updated " : "Added ") + name);
     S.modal = null; toast(old ? "Member updated" : "Member added"); return;
   }
