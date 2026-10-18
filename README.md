@@ -95,7 +95,11 @@ PDF, or **Download Excel** to export an Excel-compatible workbook file.
 The President can record dated transaction costs, such as bank withdrawal or
 transfer charges, from the **Expenses** sidebar page. Costs reduce the main
 balance, cash available to lend, and unshared earnings, and are included in
-group reports. Officers can delete pending loan applications without
+group reports. Officers can use **Edit main balance** on the dashboard to
+reconcile the amount in hand to actual cash; this adjustment changes cash
+available without changing contribution or earnings totals. The dashboard's
+rate-contributions figure includes recorded rate-fee payments only, excluding
+contribution overpayments. Officers can delete pending loan applications without
 repayments from the loan row's **Delete request** action. On Rate contributions,
 officers can manually set a member's displayed penalty accrued and rate
 contributions received totals; this does not create or change a cash payment,
