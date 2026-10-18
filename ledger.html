@@ -516,15 +516,22 @@ function loanInterestCredited(pid) {
 }
 const cashExpenses = () => S.payouts.filter(p => p.type === "cash_expense")
   .reduce((sum, expense) => sum + (Number(expense.total) || 0), 0);
-const distributedEarnings = () => S.payouts.filter(p => p.type !== "cash_expense")
+const distributedEarnings = () => S.payouts.filter(p =>
+  p.type !== "cash_expense" && p.type !== "cash_balance_adjustment")
   .reduce((a, p) => a + (Number(p.total) || 0), 0);
+const cashBalanceAdjustment = () => S.payouts.find(p =>
+  p.id === "manual_cash_balance_adjustment" && p.type === "cash_balance_adjustment") || null;
+const cashBalanceAdjustmentTotal = () => {
+  const adjustment = cashBalanceAdjustment();
+  return adjustment ? Number(adjustment.total) || 0 : 0;
+};
 const disbursedPrincipal = () => S.loans.filter(l => l.disbursedAt).reduce((a, l) => a + (Number(l.principal) || 0), 0);
 const principalOut = () => Math.max(0, disbursedPrincipal() - principalRepaid());
 const committedPrincipal = () => S.loans.filter(l => l.status === "approved").reduce((a, l) => a + (Number(l.principal) || 0), 0);
 const earningsPool = () => interestCollected() - distributedEarnings() - cashExpenses();
 const rateSavingsUnallocated = () => Math.max(0, rateSavingsTotal() - contributionInterestCollected());
 const boxTotal = () => groupContributions() + feesTotal() + rateSavingsUnallocated() + interestCollected() -
-  distributedEarnings() - cashExpenses();
+  distributedEarnings() - cashExpenses() + cashBalanceAdjustmentTotal();
 const cashAvailable = () => boxTotal() - principalOut();
 const lendable = () => Math.max(0, cashAvailable() - committedPrincipal());
 const maxLoanFor = pid => totalSaved(pid) * cfg().loanMultiplier;
@@ -879,7 +886,7 @@ function vaultHero() {
     '<p class="caption">In the box today</p><div class="amount">' + num(box) + '<span>RWF</span></div></div>' +
     '<div class="side">' +
       '<div><b>' + num(groupContributions()) + '</b><small>Saved by members</small></div>' +
-      '<div><b>' + num(feesTotal() + rateSavingsUnallocated()) + '</b><small>Rate contributions</small></div>' +
+      '<div><b>' + num(feesTotal()) + '</b><small>Rate contributions</small></div>' +
       '<div><b>' + num(interestCollected()) + '</b><small>Interest earned</small></div>' +
       '<div><b>' + num(cashExpenses()) + '</b><small>Transaction costs</small></div>' +
     '</div></div>' +
@@ -906,6 +913,7 @@ function adminDashboard() {
 
   return '<div class="pagehead"><div><h2>Dashboard</h2><p>Where the group\u2019s money is sitting, and what needs a decision.</p></div>' +
     (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="book-corrections">Apply recorded book payments</button> ' : "") +
+    (isAdmin() && canWrite() ? '<button class="btn" data-act="modal" data-m="cash-balance">Edit main balance</button> ' : "") +
     (isPresident() && canWrite() ? '<button class="btn" data-act="modal" data-m="cash-expense">Record transaction cost</button> ' : "") +
     (canWrite() ? '<button class="btn primary" data-act="modal" data-m="savings-quick">Record a payment</button>' : "") + '</div>' +
     vaultHero() +
@@ -1433,8 +1441,8 @@ function earningsView() {
     people.map(p => '<tr><td class="name">' + esc(p.name) + '</td><td class="num muted">' + num(totalSaved(p.id)) + '</td>' +
       '<td class="num">' + money(shares[p.id] || 0) + '</td></tr>').join("") + '</tbody></table></div></section>' +
     '<section class="panel"><header><div><h3>Past distributions</h3></div></header>' +
-    (S.payouts.some(p => p.type !== "cash_expense") ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Method</th><th class="num">Total</th><th class="num">Members</th></tr></thead><tbody>' +
-      S.payouts.filter(p => p.type !== "cash_expense").slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(p => '<tr><td>' + fmtDate(p.at) + '</td>' +
+    (S.payouts.some(p => p.type !== "cash_expense" && p.type !== "cash_balance_adjustment") ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Method</th><th class="num">Total</th><th class="num">Members</th></tr></thead><tbody>' +
+      S.payouts.filter(p => p.type !== "cash_expense" && p.type !== "cash_balance_adjustment").slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map(p => '<tr><td>' + fmtDate(p.at) + '</td>' +
         '<td class="mini">' + (p.method === "equal" ? "Equal shares" : "By savings") + '</td><td class="num">' + money(p.total) + '</td>' +
         '<td class="num muted">' + (p.shares ? p.shares.length : 0) + '</td></tr>').join("") + '</tbody></table></div>'
       : '<div class="empty">Nothing shared out yet. Interest keeps building in the box.</div>') + '</section>' +
@@ -1514,7 +1522,7 @@ function modalView() {
     reject: rejectModal, disburse: disburseModal, repay: repayModal, payout: payoutModal,
     editme: editMeModal, password: passwordModal, resetpw: resetPwModal, "rate-payments": ratePaymentsModal,
     "rate-adjustment": rateAdjustmentModal, "cash-expense": cashExpenseModal,
-    "book-corrections": bookCorrectionsModal }[m.m];
+    "book-corrections": bookCorrectionsModal, "cash-balance": cashBalanceModal }[m.m];
   if (!f) return "";
   const v = f(m);
   return '<div class="veil" data-act="veil"><div class="modal" role="dialog" aria-modal="true">' +
@@ -1921,6 +1929,19 @@ function cashExpenseModal() {
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-cash-expense">Save transaction cost</button>'
   };
 }
+function cashBalanceModal() {
+  const adjustment = cashBalanceAdjustment();
+  const amountText = S.modal && S.modal.amount != null ? String(S.modal.amount) : String(Math.round(cashAvailable()));
+  return {
+    title: "Edit main balance",
+    body: '<div class="calcout"><div><span>Current amount in hand</span><b>' + money(cashAvailable()) + '</b></div>' +
+      '<div class="total"><span>Amount in hand after adjustment</span><b id="cash_balance_preview">' + money(amountText) + '</b></div></div>' +
+      '<label class="f"><span>Actual cash in hand (RWF)</span><input type="number" min="0" step="1" id="cash_balance_amount" data-act="cash-balance-amount" value="' + esc(amountText) + '"></label>' +
+      '<label class="f"><span>Reason for adjustment</span><input type="text" id="cash_balance_reason" maxlength="200" value="' + esc(S.modal && S.modal.reason || (adjustment && adjustment.description) || "") + '" placeholder="For example, unrecorded bank or transfer charges"></label>' +
+      '<p class="hint">This reconciles the dashboard cash balance to the actual amount in hand. It does not change member savings, rate contributions, or earnings; continue recording transaction costs separately when possible.</p>',
+    foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-cash-balance">Save balance</button>'
+  };
+}
 
 /* ============================================================
    Actions
@@ -2293,6 +2314,28 @@ async function onAct(act, el) {
     await logEvent("earnings", "Shared out " + money(total));
     S.modal = null; toast("Earnings shared out"); return;
   }
+  if (act === "save-cash-balance") {
+    if (!isAdmin() || !canWrite()) { toast("Only an officer can edit the main balance."); return; }
+    const amountText = val("cash_balance_amount"), reason = val("cash_balance_reason");
+    const amount = Number(amountText);
+    if (S.modal) Object.assign(S.modal, { amount: amountText, reason });
+    if (!amountText || !Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) {
+      S.formErr = "Enter the actual amount in hand as a non-negative whole number of RWF."; render(); return;
+    }
+    if (!reason) { S.formErr = "Enter a reason for the balance adjustment."; render(); return; }
+    if (!S.sb) { toast("The ledger is not connected; the main balance was not changed."); return; }
+    const existing = cashBalanceAdjustment();
+    const baseCashAvailable = cashAvailable() - cashBalanceAdjustmentTotal();
+    const adjustment = {
+      id: "manual_cash_balance_adjustment", type: "cash_balance_adjustment",
+      total: amount - baseCashAvailable, target: amount, description: reason,
+      at: todayISO(), by: me().name
+    };
+    await put("payouts/" + adjustment.id, adjustment);
+    S.payouts = S.payouts.filter(p => p.id !== adjustment.id).concat(adjustment);
+    await logEvent("cash-balance", "Reconciled cash in hand to " + money(amount) + (existing ? " (updated prior adjustment)" : ""));
+    S.modal = null; toast("Main balance updated"); return;
+  }
   if (act === "save-cash-expense") {
     if (!isPresident() || !canWrite()) { toast("Only the President can record a transaction cost."); return; }
     const description = val("expense_description"), amountText = val("expense_amount");
@@ -2588,6 +2631,14 @@ function wire() {
         if (S.modal && S.modal.m === "cash-expense") S.modal.amount = el.value;
         const balance = $("#expense_balance_after");
         if (balance) balance.textContent = money(boxTotal() - (Number(el.value) || 0));
+      });
+      return;
+    }
+    if (act === "cash-balance-amount") {
+      el.addEventListener("input", () => {
+        if (S.modal && S.modal.m === "cash-balance") S.modal.amount = el.value;
+        const preview = $("#cash_balance_preview");
+        if (preview) preview.textContent = money(Number(el.value) || 0);
       });
       return;
     }
