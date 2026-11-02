@@ -52,15 +52,20 @@ and Deborah in October, and first-cycle loan-interest credits of RWF 8,100 for
 Jules and RWF 16,800 for Candide.
 On October 17, this means 0 chargeable days for members paid by the 15th,
 2 for Eric and Charlotte, and 1 for Patrick.
+The contribution book records June, July, and August savings payments on the
+12th; these timely payments produce zero chargeable penalty days.
 From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
 add the October book payments to an existing ledger, including Eric's combined
 RWF 60,100 payment split into RWF 50,000 savings, RWF 2,000 rate contribution,
 and RWF 8,100 loan interest. Legacy Eric entries of RWF 58,100 (savings plus
 interest, before the rate payment was included) are normalized into the same
-categories. Charlotte's RWF 25,000 savings and RWF 1,500 rate contribution are
-also recorded. The admin must enter the actual payment dates for these
-entries when dates are not already recorded. The
+categories. Charlotte's combined RWF 26,500 October entry is split into
+RWF 25,000 savings and RWF 1,500 rate contribution. Applying book payments
+also records the June, July, and August contributions on the 12th so the
+monthly report shows their actual dates and zero chargeable days. The admin
+must enter the actual payment dates for the October entries when dates are not
+already recorded. The
 dialog checks for October totals of RWF 4,000 in rate contributions and RWF
 33,000 in loan interest. If Jules's October savings row contains RWF 58,100,
 reconciliation records RWF 50,000 as savings and classifies the remaining
