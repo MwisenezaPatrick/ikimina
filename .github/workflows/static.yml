@@ -33,6 +33,43 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Configure Supabase public client
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'ledger.html';
+          const url = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+          if (!url || !key) {
+            throw new Error('Set the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY repository variables before deploying GitHub Pages.');
+          }
+          if (key.startsWith('sb_secret_')) {
+            throw new Error('A Supabase secret key cannot be used in the browser app.');
+          }
+          if (!key.startsWith('sb_publishable_')) {
+            let payload;
+            try {
+              payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString());
+            } catch (_) {
+              throw new Error('Use a Supabase publishable key or legacy anon public key.');
+            }
+            if (payload.role !== 'anon') {
+              throw new Error('Only a Supabase publishable key or legacy anon public key can be deployed.');
+            }
+          }
+          let html = fs.readFileSync(file, 'utf8');
+          const urlMarker = '"__SUPABASE_URL__"';
+          const keyMarker = '"__SUPABASE_PUBLISHABLE_KEY__"';
+          if (!html.includes(urlMarker) || !html.includes(keyMarker)) {
+            throw new Error('The Supabase configuration placeholders were not found in ledger.html.');
+          }
+          html = html.replace(urlMarker, JSON.stringify(url));
+          html = html.replace(keyMarker, JSON.stringify(key));
+          fs.writeFileSync(file, html);
+          NODE
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
