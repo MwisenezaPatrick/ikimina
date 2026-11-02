@@ -1906,7 +1906,7 @@ function bookCorrectionsPlan() {
     ? bookPaymentDate("julesInterest", validOctoberPaymentDate(julesRecordedDate)
       ? julesRecordedDate : existingBookPaymentDate("jules:interest")) : "";
   const ericSaving = S.savings.find(item => item.personId === "eric" && item.period === "2026-10");
-  const ericCombinedPayment = !!ericSaving && Number(ericSaving.amount) === 60100;
+  const ericCombinedPayment = !!ericSaving && [58100, 60100].includes(Number(ericSaving.amount));
   const ericRecordedDate = ericSaving && ericSaving.recordedAt ? ericSaving.recordedAt.slice(0, 10) : "";
   const ericInterestDate = bookPaymentDate("ericInterest", validOctoberPaymentDate(ericRecordedDate)
     ? ericRecordedDate : existingBookPaymentDate("eric:interest"));
@@ -1969,7 +1969,8 @@ function bookCorrectionsPlan() {
         period: existing.period
       }));
     } else if (spec.isAddedPayment && Number(existing.amount) !== spec.amount) {
-      throw new Error("The October contribution recorded for " + spec.personId + " does not match the contribution book; review it first.");
+      throw new Error("The October contribution recorded for " + spec.personId + " is " + money(existing.amount) +
+        ", but the expected savings contribution is " + money(spec.amount) + "; review it first.");
     } else if (spec.isAddedPayment && (existing.recordedAt || "").slice(0, 10) !== spec.recordedAt.slice(0, 10)) {
       throw new Error("An October contribution for " + spec.personId + " already exists on a different date; review it rather than replacing it.");
     }
@@ -2083,7 +2084,7 @@ function bookCorrectionsModal() {
   const body = '<p>Reconcile the recorded contribution book with the ledger. Existing conflicting payments will stop the update rather than be overwritten.</p><ul>' +
     '<li>Deborah and Patrick rate contributions: RWF 250 each</li>' +
     '<li>Eric rate contribution: RWF 2,000; Charlotte rate contribution: RWF 1,500</li>' +
-    '<li>Eric combined payment: RWF 50,000 savings, RWF 2,000 rate contribution, and RWF 8,100 loan interest; Charlotte: RWF 25,000 savings and RWF 1,500 rate contribution</li>' +
+    '<li>Eric combined payment: RWF 50,000 savings, RWF 2,000 rate contribution, and RWF 8,100 loan interest (existing RWF 58,100 entries are recognized as savings plus interest); Charlotte: RWF 25,000 savings and RWF 1,500 rate contribution</li>' +
     '<li>Eric loan interest repayment: RWF 8,100</li>' +
     '<li>Jules first-cycle loan interest credited: RWF 8,100</li><li>Candide first-cycle loan interest credited: RWF 16,800</li></ul>' +
     '<div class="grid2">' + (S.savings.some(row => row.personId === "jules" && row.period === "2026-10" && Number(row.amount) === 58100)
