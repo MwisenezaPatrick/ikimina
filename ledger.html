@@ -1879,15 +1879,26 @@ function existingBookPaymentDate(key) {
   const loan = S.loans.find(item => item.personId === personId);
   const rows = loan ? S.repayments.filter(item => item.loanId === loan.id && Number(item.amount) === 8100 &&
     item.at && item.at.slice(0, 7) === "2026-10") : [];
-  return rows.length === 1 ? (rows[0].at || "").slice(0, 10) : "";
+  if (rows.length === 1) return (rows[0].at || "").slice(0, 10);
+  if (rows.length > 1) return "";
+  const saving = S.savings.find(item => item.personId === personId && item.period === "2026-10");
+  return personId === "jules" && saving && Number(saving.amount) === 58100 && saving.recordedAt
+    ? saving.recordedAt.slice(0, 10) : "";
 }
 function bookCorrectionsPlan() {
+  const julesSaving = S.savings.find(item => item.personId === "jules" && item.period === "2026-10");
+  const julesCombinedPayment = !!julesSaving && Number(julesSaving.amount) === 58100;
+  const julesRecordedDate = julesSaving && julesSaving.recordedAt ? julesSaving.recordedAt.slice(0, 10) : "";
+  const julesInterestDate = julesCombinedPayment
+    ? bookPaymentDate("julesInterest", validOctoberPaymentDate(julesRecordedDate)
+      ? julesRecordedDate : existingBookPaymentDate("jules:interest")) : "";
   const feeSpecs = [
     { id: "fee_deborah_2026-10", personId: "deborah", amount: 250, at: "2026-10-17" },
     { id: "fee_patrick_2026-10", personId: "patrick", amount: 250, at: "2026-10-16" }
   ];
   const repaymentSpecs = [
-    { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 8100 },
+    { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 8100,
+      at: julesCombinedPayment ? julesInterestDate : undefined, fromCombinedSavings: julesCombinedPayment },
     { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 },
     { id: "repay_book_eric_october_interest", personId: "eric", loanId: "loan_eric", amount: 8100,
       at: bookPaymentDate("ericInterest", existingBookPaymentDate("eric:interest")) }
@@ -1920,12 +1931,17 @@ function bookCorrectionsPlan() {
     const existing = matches[0];
     if (!existing) {
       savings.push(spec);
-    } else if (Number(existing.amount) !== spec.amount) {
+    } else if (spec.personId === "jules" && julesCombinedPayment) {
+      savings.push(Object.assign({}, existing, {
+        amount: spec.amount,
+        id: existing.id,
+        personId: existing.personId,
+        period: existing.period
+      }));
+    } else if (spec.isAddedPayment && Number(existing.amount) !== spec.amount) {
       throw new Error("The October contribution recorded for " + spec.personId + " does not match the contribution book; review it first.");
-    } else if ((existing.recordedAt || "").slice(0, 10) !== spec.recordedAt.slice(0, 10)) {
+    } else if (spec.isAddedPayment && (existing.recordedAt || "").slice(0, 10) !== spec.recordedAt.slice(0, 10)) {
       throw new Error("An October contribution for " + spec.personId + " already exists on a different date; review it rather than replacing it.");
-    } else if (!spec.isAddedPayment && existing.recordedBy !== "Contribution book") {
-      throw new Error("An October contribution for " + spec.personId + " exists with a different source; review it rather than replacing it.");
     }
   }
 
@@ -1983,9 +1999,10 @@ function bookCorrectionsPlan() {
       if (Number(existing.principal) !== 0 || Number(existing.interest) !== spec.amount) {
         throw new Error("The matching loan interest record for " + spec.personId + " has a different allocation; review it rather than replacing it.");
       }
-    } else if (loanPayments.length === 0 || spec.personId === "eric") {
+    } else if (loanPayments.length === 0 || spec.personId === "eric" || spec.fromCombinedSavings) {
       repayments.push(Object.assign({}, spec, { principal: 0, interest: spec.amount, at: spec.at || "2026-10-01",
-        by: spec.personId === "eric" ? "October payment update" : "Contribution book" }));
+        by: spec.personId === "eric" ? "October payment update" :
+          spec.fromCombinedSavings ? (julesSaving.recordedBy || "October payment update") : "Contribution book" }));
     } else {
       throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first-month interest payment cannot be identified safely.");
     }
@@ -2014,38 +2031,23 @@ function bookCorrectionsTotals(plan) {
     S.savings = savingsBefore;
   }
 }
-function expectedOctoberChargeableDays() {
-  const expected = Object.assign({}, BOOK_EXPECTED_CHARGEABLE_DAYS);
-  for (const personId of ["eric", "charlotte"]) {
-    const date = bookPaymentDate(personId + "Savings", existingBookPaymentDate(personId + ":savings"));
-    expected[personId] = date < "2026-10-16" ? 0
-      : date <= BOOK_CHARGEABLE_DAYS_AS_OF
-        ? daysBetween("2026-10-16", date, true) : BOOK_EXPECTED_CHARGEABLE_DAYS[personId];
-  }
-  return expected;
-}
 function bookCorrectionsModal() {
   let plan, totals, problem = "";
   try {
     plan = bookCorrectionsPlan();
     totals = bookCorrectionsTotals(plan);
-    const expectedDays = expectedOctoberChargeableDays();
-    const wrongDays = Object.keys(expectedDays)
-      .filter(pid => totals.chargeableDays[pid] !== expectedDays[pid]);
-    if (totals.rates !== 4000 || totals.interest !== 33000 || wrongDays.length) {
+    if (totals.rates !== 4000 || totals.interest !== 33000) {
       problem = "Applying these entries would leave totals at " + money(totals.rates) + " for rate contributions and " +
-        money(totals.interest) + " for loan interest" +
-        (wrongDays.length ? "; chargeable-day totals do not match the recorded payment dates for " + wrongDays.join(", ") : "") +
-        ". No records will be changed; review existing payments first.";
+        money(totals.interest) + " for loan interest. No records will be changed; review existing payments first.";
     }
   } catch (e) { problem = e.message; }
   const updates = plan ? plan.fees.length + plan.feeDeletions.length + plan.repayments.length + plan.savings.length : 0;
-  const dateInput = (key, label) => {
+  const dateInput = (key, label, initialDate) => {
     const selected = S.modal && S.modal.paymentDates && S.modal.paymentDates[key];
     const existing = existingBookPaymentDate(key.replace(/Savings|Rate|Interest$/, "") + ":" +
       (key.endsWith("Savings") ? "savings" : key.endsWith("Rate") ? "rate" : "interest"));
     return '<label class="f"><span>' + label + '</span><input type="date" min="2026-10-01" max="2026-10-31" data-act="book-date" data-key="' +
-      esc(key) + '" value="' + esc(selected || existing) + '"></label>';
+      esc(key) + '" value="' + esc(selected || initialDate || existing) + '"></label>';
   };
   const body = '<p>Reconcile the recorded contribution book with the ledger. Existing conflicting payments will stop the update rather than be overwritten.</p><ul>' +
     '<li>Deborah and Patrick rate contributions: RWF 250 each</li>' +
@@ -2053,13 +2055,16 @@ function bookCorrectionsModal() {
     '<li>Eric October savings contribution: RWF 50,000; Charlotte: RWF 25,000</li>' +
     '<li>Eric loan interest repayment: RWF 8,100</li>' +
     '<li>Jules first-month loan interest credited: RWF 8,100</li><li>Candide first-month loan interest credited: RWF 16,800</li></ul>' +
-    '<div class="grid2">' + dateInput("ericSavings", "Eric savings payment date") +
+    '<div class="grid2">' + (S.savings.some(row => row.personId === "jules" && row.period === "2026-10" && Number(row.amount) === 58100)
+      ? dateInput("julesInterest", "Jules combined payment date", validOctoberPaymentDate(existingBookPaymentDate("jules:savings"))
+        ? existingBookPaymentDate("jules:savings") : "") : "") +
+      dateInput("ericSavings", "Eric savings payment date") +
       dateInput("ericInterest", "Eric loan-interest payment date") +
       dateInput("ericRate", "Eric rate-contribution date") +
       dateInput("charlotteSavings", "Charlotte savings payment date") +
       dateInput("charlotteRate", "Charlotte rate-contribution date") + '</div>' +
     '<p class="mini">Expected October totals after applying: RWF 4,000 rate contributions and RWF 33,000 loan interest.</p>' +
-    '<p class="hint">Existing matching payments are updated in place. Missing payments are added. Unrelated records are never changed, and applying this again will not duplicate these entries.</p>' +
+    '<p class="hint">Existing October savings for other members are preserved as recorded. Missing book entries and the listed payments are added only when they are not already present; conflicting target payments are never overwritten.</p>' +
     (problem ? '<div class="err">' + esc(problem) + '</div>' :
       '<p class="mini">' + (updates ? updates + ' record(s) will be added or corrected.' : 'These payments are already reconciled.') + '</p>');
   return {
@@ -2481,10 +2486,7 @@ async function onAct(act, el) {
       render();
       return;
     }
-    const expectedDays = expectedOctoberChargeableDays();
-    const wrongDays = Object.keys(expectedDays)
-      .filter(pid => totals.chargeableDays[pid] !== expectedDays[pid]);
-    if (totals.rates !== 4000 || totals.interest !== 33000 || wrongDays.length) {
+    if (totals.rates !== 4000 || totals.interest !== 33000) {
       S.formErr = "The ledger changed since this dialog opened. Review rate totals, loan interest totals, and October payment dates before applying corrections.";
       render();
       return;
