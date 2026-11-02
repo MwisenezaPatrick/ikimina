@@ -56,8 +56,10 @@ From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
 add the October book payments to an existing ledger, including Eric's combined
 RWF 60,100 payment split into RWF 50,000 savings, RWF 2,000 rate contribution,
-and RWF 8,100 loan interest, plus Charlotte's RWF 25,000 savings and RWF 1,500
-rate contribution. The admin must enter the actual payment dates for these
+and RWF 8,100 loan interest. Legacy Eric entries of RWF 58,100 (savings plus
+interest, before the rate payment was included) are normalized into the same
+categories. Charlotte's RWF 25,000 savings and RWF 1,500 rate contribution are
+also recorded. The admin must enter the actual payment dates for these
 entries when dates are not already recorded. The
 dialog checks for October totals of RWF 4,000 in rate contributions and RWF
 33,000 in loan interest. If Jules's October savings row contains RWF 58,100,
