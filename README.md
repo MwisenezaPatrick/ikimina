@@ -48,20 +48,22 @@ earlier instructions). Click **Sign in**, and you should land on a
 members, their savings, and their existing loans. The sample book includes
 October 2026 contributions paid by the 15th except Eric and Charlotte (unpaid)
 and Patrick (paid on the 16th), RWF 250 rate payments from Patrick in October
-and Deborah in October, and first-month loan-interest credits of RWF 8,100 for
+and Deborah in October, and first-cycle loan-interest credits of RWF 8,100 for
 Jules and RWF 16,800 for Candide.
 On October 17, this means 0 chargeable days for members paid by the 15th,
 2 for Eric and Charlotte, and 1 for Patrick.
 From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
-add the October book payments to an existing ledger, including Eric's RWF
-50,000 savings, RWF 2,000 rate contribution, and RWF 8,100 loan-interest
-payment, plus Charlotte's RWF 25,000 savings and RWF 1,500 rate contribution.
-The admin must enter the actual payment dates for these five entries. The
+add the October book payments to an existing ledger, including Eric's combined
+RWF 60,100 payment split into RWF 50,000 savings, RWF 2,000 rate contribution,
+and RWF 8,100 loan interest, plus Charlotte's RWF 25,000 savings and RWF 1,500
+rate contribution. The admin must enter the actual payment dates for these
+entries when dates are not already recorded. The
 dialog checks for October totals of RWF 4,000 in rate contributions and RWF
 33,000 in loan interest. If Jules's October savings row contains RWF 58,100,
 reconciliation records RWF 50,000 as savings and classifies the remaining
-RWF 8,100 as loan interest, without duplicating an existing interest payment.
+RWF 8,100 as loan interest. Neither combined payment is duplicated or counted
+as savings overpayment.
 Other existing savings rows are preserved as recorded; conflicting or
 ambiguous target payments block reconciliation instead of being overwritten,
 and historical rate payments are preserved.
@@ -76,8 +78,10 @@ payments only; eligible contribution overpayments are applied as credits
 separately so they do not inflate that received total. Penalty outstanding
 never falls below zero, and excess credits remain available after the penalty
 is covered. Amounts paid above the normal contribution cover the
-penalty first, then accrued loan interest at the loan's monthly rate (3% by
-default) on outstanding principal. Any remaining amount is carried forward as
+penalty first, then accrued loan interest at the loan's configured rate (3%
+per completed 45-day cycle by default) on outstanding principal. Loan interest
+is calculated after each complete 45-day cycle from final officer approval;
+partial cycles do not accrue interest. Any remaining amount is carried forward as
 an interest credit; it does not count toward savings or reduce loan principal.
 Loan interest credited from
 repayments, including Jules's RWF 8,100 and Candide's RWF 16,800, is reported

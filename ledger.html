@@ -277,6 +277,7 @@ const DEFAULTS = {
 };
 const LOAN_AGREEMENT_VERSION = "dashboard-terms-2026-10-17-v1";
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const LOAN_INTEREST_CYCLE_DAYS = 45;
 
 const S = {
   sb: null,
@@ -488,26 +489,38 @@ function principalRepaidAt(l, date) {
   return Math.min(Number(l.principal) || 0, S.repayments.filter(r => r.loanId === l.id && r.at && r.at.slice(0, 10) <= date)
     .reduce((sum, r) => sum + splitPart(r, "principal"), 0));
 }
+function loanInterestStartDate(loan) {
+  const approvalDate = loan.approvedAt || (loan.approvals && loan.approvals.supervisor && loan.approvals.supervisor.at);
+  return approvalDate ? String(approvalDate).slice(0, 10) : (loan.disbursedAt || null);
+}
+function loanInterestRate(loan) {
+  const storedRate = loan.rate == null ? NaN : Number(loan.rate);
+  if (Number.isFinite(storedRate)) return storedRate;
+  const configuredRate = Number(cfg().interestRate);
+  return Number.isFinite(configuredRate) ? configuredRate : 0.03;
+}
 function loanInterestDue(l, asOf) {
-  const storedRate = Number(l.rate);
-  const rate = Number.isFinite(storedRate) ? storedRate : 0.03;
-  const initial = Number(l.interest) || 0;
-  if (!l.disbursedAt) return initial;
-  const through = l.status === "closed" && l.closedAt ? l.closedAt : asOf || todayISO();
-  let extra = 0;
-  for (let month = 2, due = addMonths(l.disbursedAt, month); due <= through; month++, due = addMonths(l.disbursedAt, month)) {
+  const start = loanInterestStartDate(l);
+  if (!start || !["approved", "disbursed", "closed"].includes(l.status)) return 0;
+  const through = l.status === "closed" && l.closedAt
+    ? (asOf ? (asOf < l.closedAt ? asOf : l.closedAt) : l.closedAt)
+    : asOf || todayISO();
+  const rate = loanInterestRate(l);
+  let accrued = 0;
+  for (let cycle = 1, due = addDays(start, LOAN_INTEREST_CYCLE_DAYS); due <= through;
+    cycle++, due = addDays(start, cycle * LOAN_INTEREST_CYCLE_DAYS)) {
     const principal = Math.max(0, (Number(l.principal) || 0) - principalRepaidAt(l, due));
-    extra += principal * rate;
+    accrued += Math.round(principal * rate);
   }
-  return initial + Math.round(extra);
+  return accrued;
 }
 function loanInterestCreditAllocations(pid, asOf) {
   const p = personById(pid);
   if (!p) return { byLoan: {}, advance: 0 };
   let credit = rateDetails(p, asOf).loanInterestCredit;
   const byLoan = {};
-  const loans = loansOf(pid).filter(l => l.disbursedAt).slice().sort((a, b) =>
-    (a.disbursedAt || "").localeCompare(b.disbursedAt || ""));
+  const loans = loansOf(pid).filter(l => loanInterestStartDate(l) && loanInterestStartDate(l) <= (asOf || todayISO())).slice().sort((a, b) =>
+    loanInterestStartDate(a).localeCompare(loanInterestStartDate(b)));
   for (const l of loans) {
     const outstanding = Math.max(0, loanInterestDue(l, asOf) - loanInterestPaidFromRepayments(l.id, asOf));
     const applied = Math.min(credit, outstanding);
@@ -724,7 +737,8 @@ async function seedBook() {
         principal: b.loan, rate, interest, total: b.loan + interest, days: 45,
         status: "disbursed", savingsAtRequest: b.monthly * 4, maxAtRequest: b.monthly * 4 * 1.8,
         approvals: { first: stamp("Contribution book"), second: stamp("Contribution book"), supervisor: stamp("Contribution book") },
-        requestedAt: "2026-09-01T00:00:00.000Z", disbursedAt: "2026-09-01", dueDate: addDays("2026-09-01", 45),
+        requestedAt: "2026-09-01T00:00:00.000Z", approvedAt: "2026-09-01T00:00:00.000Z",
+        disbursedAt: "2026-09-01", dueDate: addDays("2026-09-01", 45),
         fromBook: true
       });
       if (b.interestPaid) {
@@ -919,6 +933,7 @@ function seedView() {
     '<div class="brand" style="margin-bottom:22px"><span class="mark"></span><div><h1>Ikimina Savings &amp; Loan</h1><small>Savings &amp; loan ledger</small></div></div>' +
     '<div class="panel"><div class="body">' +
     '<h3 style="margin-bottom:6px">Load the contribution book</h3>' +
+    '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-cycle loan interest paid by Jules (RWF 8,100) and Candide (RWF 16,800), Deborah\u2019s and Patrick\u2019s RWF 250 October rate contributions, and the October payment dates. A database administrator must then authorize member email addresses for secure sign-in.</p>' +
     '<p class="mini">This sets up the group from your book: eight members, contributions for June to October 2026, the three loans running, first-month loan interest credited for Jules (RWF 8,100) and Candide (RWF 16,800), Deborah\u2019s and Patrick\u2019s RWF 250 October rate contributions, and the October payment dates. Sign-in accounts are created for everyone.</p>' +
     '<button class="btn primary" data-act="seed"' + (S.busy ? " disabled" : "") + '>' + (S.busy ? "Loading\u2026" : "Load the book") + '</button>' +
     '</div></div></main></div>';
@@ -1012,7 +1027,7 @@ function adminDashboard() {
 
       '<section class="panel"><header><div><h3>Interest per loan</h3><p>Expected against collected</p></div></header><div class="body">' +
         (S.loans.length ? hbars(S.loans.map(l => ({
-          label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + (l.rate * 100) + "% / month",
+          label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + (loanInterestRate(l) * 100) + "% / 45 days",
           right: money(loanInterestPaid(l.id)) + " of " + money(loanInterestDue(l)),
           parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)), color: "var(--line)" }]
         }))) : '<p class="mini">No loans recorded yet.</p>') +
@@ -1053,7 +1068,7 @@ function memberDashboard() {
 
       '<section class="panel"><header><div><h3>Your loan</h3></div></header><div class="body">' +
         (open ? '<div class="calcout"><div><span>Loan</span><b>' + money(open.principal) + '</b></div>' +
-          '<div><span>Interest at ' + (open.rate * 100) + '% / month</span><b>' + money(loanInterestDue(open)) + '</b></div>' +
+          '<div><span>Interest at ' + (loanInterestRate(open) * 100) + '% per 45 days</span><b>' + money(loanInterestDue(open)) + '</b></div>' +
           '<div><span>Repaid so far</span><b>' + money(loanRepaid(open.id)) + '</b></div>' +
           '<div class="total"><span>Still owing</span><b>' + money(loanBalance(open)) + '</b></div></div>' +
           hbars([{ label: open.number, right: open.dueDate ? "due " + fmtDate(open.dueDate) : "not paid out yet",
@@ -1239,7 +1254,7 @@ function rateContributionsView() {
           '<button class="btn small" data-act="modal" data-m="rate-adjustment" data-id="' + esc(person.id) + '">Manual adjustment</button></div></td>' : "") + '</tr>';
       }).join("") +
       '</tbody></table></div>' : '<div class="empty">No active members.</div>') + '</section>' +
-    '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows recorded rate-fee payments; contribution overpayments are applied as credits separately, so they can reduce penalty outstanding without inflating the received total. Penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
+    '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows recorded rate-fee payments; contribution overpayments are applied as credits separately, so they can reduce penalty outstanding without inflating the received total. Penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then accrued loan interest at the configured rate for each completed 45-day cycle on outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
 }
 
 function reportTransactions() {
@@ -1294,18 +1309,12 @@ function validReportMonth(period) {
 }
 
 function reportLoanInterestDue(loan, asOf) {
-  if (!loan.disbursedAt || loan.disbursedAt > asOf) return 0;
-  const rate = Number.isFinite(Number(loan.rate)) ? Number(loan.rate) : 0.03;
-  let due = Number(loan.interest) || 0;
-  for (let month = 2, nextDue = addMonths(loan.disbursedAt, month); nextDue <= asOf; month++, nextDue = addMonths(loan.disbursedAt, month)) {
-    if (loan.closedAt && loan.closedAt < nextDue) break;
-    due += Math.round(Math.max(0, Number(loan.principal) - principalRepaidAt(loan, nextDue)) * rate);
-  }
-  return due;
+  return loanInterestDue(loan, asOf);
 }
 
 function reportLoanBalanceAt(loan, asOf) {
-  if (!loan.disbursedAt || loan.disbursedAt > asOf) return 0;
+  const interestStart = loanInterestStartDate(loan);
+  if (!interestStart || interestStart > asOf) return 0;
   const principal = Math.max(0, Number(loan.principal) - principalRepaidAt(loan, asOf));
   const paidInterest = Math.min(reportLoanInterestDue(loan, asOf), S.repayments
     .filter(row => row.loanId === loan.id && (row.at || "").slice(0, 10) <= asOf)
@@ -1318,8 +1327,10 @@ function reportLoanCreditAllocations(personId, asOf) {
   const person = personById(personId);
   let credit = person ? rateDetails(person, asOf).loanInterestCredit : 0;
   const byLoan = {};
-  const loans = loansOf(personId).filter(loan => loan.disbursedAt && loan.disbursedAt <= asOf)
-    .slice().sort((a, b) => (a.disbursedAt || "").localeCompare(b.disbursedAt || ""));
+  const loans = loansOf(personId).filter(loan => {
+    const start = loanInterestStartDate(loan);
+    return start && start <= asOf;
+  }).slice().sort((a, b) => loanInterestStartDate(a).localeCompare(loanInterestStartDate(b)));
   for (const loan of loans) {
     const paid = S.repayments.filter(row => row.loanId === loan.id && (row.at || "").slice(0, 10) <= asOf)
       .reduce((sum, row) => sum + splitPart(row, "interest"), 0);
@@ -1565,7 +1576,8 @@ function loanDetail(l) {
     '<dt>Total savings at request</dt><dd>' + money(l.savingsAtRequest || 0) + '</dd>' +
     '<dt>Maximum allowed</dt><dd>' + money(l.maxAtRequest || 0) + '</dd>' +
     '<dt>Loan amount</dt><dd>' + money(l.principal) + '</dd>' +
-    '<dt>Interest at ' + (l.rate * 100) + '% per month</dt><dd>' + money(loanInterestDue(l)) + '</dd>' +
+    '<dt>Interest at ' + (loanInterestRate(l) * 100) + '% per 45-day cycle</dt><dd>' + money(loanInterestDue(l)) + '</dd>' +
+    '<dt>Interest starts</dt><dd>' + fmtDate(loanInterestStartDate(l)) + '</dd>' +
     '<dt>Total to repay</dt><dd>' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</dd>' +
     '<dt>Repayment period</dt><dd>' + (l.days || c.repaymentDays) + ' days</dd>' +
     '<dt>Terms accepted</dt><dd>' + (l.termsAcceptance
@@ -1634,11 +1646,11 @@ function earningsView() {
       '<div class="stat"><b>' + money(distributedEarnings()) + '</b><small>Already shared out</small></div>' +
       '<div class="stat"><b>' + money(cashExpenses()) + '</b><small>Transaction costs, all time</small></div>' +
       '<div class="stat"><b>' + money(pool) + '</b><small>Waiting to be shared</small></div>' +
-      '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" ? Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
+      '<div class="stat"><b>' + money(S.loans.reduce((a, l) => a + (l.status === "disbursed" || l.status === "approved" ? Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)) : 0), 0)) + '</b><small>Interest still to come in</small></div>' +
     '</div>' +
-    '<section class="panel"><header><div><h3>Interest on each loan</h3><p>Accrued at the loan rate each month against outstanding principal</p></div></header><div class="body">' +
+    '<section class="panel"><header><div><h3>Interest on each loan</h3><p>Charged for each completed 45-day cycle from approval on outstanding principal</p></div></header><div class="body">' +
     (S.loans.length ? hbars(S.loans.map(l => ({
-      label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + esc(l.number) + " \u00b7 " + (l.rate * 100) + "% / month",
+      label: ((personById(l.personId) || {}).name || "?") + " \u00b7 " + esc(l.number) + " \u00b7 " + (loanInterestRate(l) * 100) + "% / 45 days",
       right: money(loanInterestPaid(l.id)) + " of " + money(loanInterestDue(l)),
       parts: [{ value: loanInterestPaid(l.id), color: "var(--green)" }, { value: Math.max(0, loanInterestDue(l) - loanInterestPaid(l.id)), color: "var(--line)" }]
     }))) : '<p class="mini">No loans recorded yet.</p>') + '</div></section>' +
@@ -1703,7 +1715,7 @@ function settingsView() {
     '<div class="inline"><label class="f"><span>Default monthly saving</span><input type="number" id="s_contrib" value="' + c.monthlyContribution + '"' + (admin ? "" : " disabled") + '></label>' +
     '<label class="f"><span>Loan multiplier</span><input type="number" step="0.1" id="s_mult" value="' + c.loanMultiplier + '"' + (admin ? "" : " disabled") + '></label></div>' +
     '<p class="hint">Members who save a different amount, like the 50,000 savers, have their own figure set on their member record.</p>' +
-    '<div class="inline"><label class="f"><span>Monthly interest on new loans (%)</span><input type="number" step="0.5" id="s_rate" value="' + (c.interestRate * 100) + '"' + (admin ? "" : " disabled") + '></label>' +
+    '<div class="inline"><label class="f"><span>Interest per 45-day cycle on new loans (%)</span><input type="number" step="0.5" id="s_rate" value="' + (c.interestRate * 100) + '"' + (admin ? "" : " disabled") + '></label>' +
     '<label class="f"><span>Days to repay</span><input type="number" id="s_days" value="' + c.repaymentDays + '"' + (admin ? "" : " disabled") + '></label></div>' +
     '<div class="inline"><label class="f"><span>Sharing earnings</span><select id="s_dist"' + (admin ? "" : " disabled") + '>' +
       '<option value="equal"' + (c.distribution === "equal" ? " selected" : "") + '>Equal share for every member</option>' +
@@ -1867,23 +1879,24 @@ function bookPaymentDate(key, existingDate) {
 }
 function existingBookPaymentDate(key) {
   const [personId, category] = key.split(":");
+  const saving = S.savings.find(item => item.personId === personId && item.period === "2026-10");
+  const combinedAmount = personId === "jules" ? 58100 : personId === "eric" ? 60100 : 0;
+  const combinedDate = combinedAmount && saving && Number(saving.amount) === combinedAmount && saving.recordedAt
+    ? saving.recordedAt.slice(0, 10) : "";
   if (category === "savings") {
-    const row = S.savings.find(item => item.personId === personId && item.period === "2026-10");
-    return row && row.recordedAt ? row.recordedAt.slice(0, 10) : "";
+    return saving && saving.recordedAt ? saving.recordedAt.slice(0, 10) : "";
   }
   if (category === "rate") {
     const rows = S.fees.filter(item => item.personId === personId && /rate/i.test(item.label || "") &&
       item.at && item.at.slice(0, 7) === "2026-10");
-    return rows.length === 1 ? (rows[0].at || "").slice(0, 10) : "";
+    return rows.length === 1 ? (rows[0].at || "").slice(0, 10) : rows.length ? "" : combinedDate;
   }
   const loan = S.loans.find(item => item.personId === personId);
   const rows = loan ? S.repayments.filter(item => item.loanId === loan.id && Number(item.amount) === 8100 &&
     item.at && item.at.slice(0, 7) === "2026-10") : [];
   if (rows.length === 1) return (rows[0].at || "").slice(0, 10);
   if (rows.length > 1) return "";
-  const saving = S.savings.find(item => item.personId === personId && item.period === "2026-10");
-  return personId === "jules" && saving && Number(saving.amount) === 58100 && saving.recordedAt
-    ? saving.recordedAt.slice(0, 10) : "";
+  return combinedDate;
 }
 function bookCorrectionsPlan() {
   const julesSaving = S.savings.find(item => item.personId === "jules" && item.period === "2026-10");
@@ -1892,6 +1905,11 @@ function bookCorrectionsPlan() {
   const julesInterestDate = julesCombinedPayment
     ? bookPaymentDate("julesInterest", validOctoberPaymentDate(julesRecordedDate)
       ? julesRecordedDate : existingBookPaymentDate("jules:interest")) : "";
+  const ericSaving = S.savings.find(item => item.personId === "eric" && item.period === "2026-10");
+  const ericCombinedPayment = !!ericSaving && Number(ericSaving.amount) === 60100;
+  const ericRecordedDate = ericSaving && ericSaving.recordedAt ? ericSaving.recordedAt.slice(0, 10) : "";
+  const ericInterestDate = bookPaymentDate("ericInterest", validOctoberPaymentDate(ericRecordedDate)
+    ? ericRecordedDate : existingBookPaymentDate("eric:interest"));
   const feeSpecs = [
     { id: "fee_deborah_2026-10", personId: "deborah", amount: 250, at: "2026-10-17" },
     { id: "fee_patrick_2026-10", personId: "patrick", amount: 250, at: "2026-10-16" }
@@ -1901,7 +1919,7 @@ function bookCorrectionsPlan() {
       at: julesCombinedPayment ? julesInterestDate : undefined, fromCombinedSavings: julesCombinedPayment },
     { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 },
     { id: "repay_book_eric_october_interest", personId: "eric", loanId: "loan_eric", amount: 8100,
-      at: bookPaymentDate("ericInterest", existingBookPaymentDate("eric:interest")) }
+      at: ericInterestDate, fromCombinedSavings: ericCombinedPayment }
   ];
   const octoberSavingsSpecs = BOOK.map(b => {
     const isAddedPayment = b.id === "eric" || b.id === "charlotte";
@@ -1915,11 +1933,16 @@ function bookCorrectionsPlan() {
     };
   });
   for (const [personId, key, amount] of [["eric", "ericRate", 2000], ["charlotte", "charlotteRate", 1500]]) {
-    const existing = S.fees.filter(item => item.personId === personId && /rate/i.test(item.label || ""));
-    if (existing.length > 1) throw new Error("More than one rate payment is already recorded for " + personId + "; review those records first.");
+    const allExisting = S.fees.filter(item => item.personId === personId && /rate/i.test(item.label || ""));
+    if (allExisting.some(item => !item.at)) {
+      throw new Error("An undated rate payment exists for " + personId + "; review it before adding an October payment.");
+    }
+    const existing = allExisting.filter(item => item.at.slice(0, 7) === "2026-10");
+    if (existing.length > 1) throw new Error("More than one October rate payment is already recorded for " + personId + "; review those records first.");
     feeSpecs.push({
       id: "fee_" + personId + "_2026-10", personId, amount,
-      at: bookPaymentDate(key, existing.length === 1 ? (existing[0].at || "").slice(0, 10) : ""),
+      at: bookPaymentDate(key, existing.length === 1 ? (existing[0].at || "").slice(0, 10)
+        : personId === "eric" && ericCombinedPayment && validOctoberPaymentDate(ericRecordedDate) ? ericRecordedDate : ""),
       isAddedPayment: true
     });
   }
@@ -1932,6 +1955,13 @@ function bookCorrectionsPlan() {
     if (!existing) {
       savings.push(spec);
     } else if (spec.personId === "jules" && julesCombinedPayment) {
+      savings.push(Object.assign({}, existing, {
+        amount: spec.amount,
+        id: existing.id,
+        personId: existing.personId,
+        period: existing.period
+      }));
+    } else if (spec.personId === "eric" && ericCombinedPayment) {
       savings.push(Object.assign({}, existing, {
         amount: spec.amount,
         id: existing.id,
@@ -2002,9 +2032,10 @@ function bookCorrectionsPlan() {
     } else if (loanPayments.length === 0 || spec.personId === "eric" || spec.fromCombinedSavings) {
       repayments.push(Object.assign({}, spec, { principal: 0, interest: spec.amount, at: spec.at || "2026-10-01",
         by: spec.personId === "eric" ? "October payment update" :
-          spec.fromCombinedSavings ? (julesSaving.recordedBy || "October payment update") : "Contribution book" }));
+          spec.fromCombinedSavings ? ((spec.personId === "jules" ? julesSaving : ericSaving).recordedBy || "October payment update") :
+            "Contribution book" }));
     } else {
-      throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first-month interest payment cannot be identified safely.");
+      throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first 45-day-cycle interest payment cannot be identified safely.");
     }
   }
   return { fees, feeDeletions, repayments, savings };
@@ -2052,9 +2083,9 @@ function bookCorrectionsModal() {
   const body = '<p>Reconcile the recorded contribution book with the ledger. Existing conflicting payments will stop the update rather than be overwritten.</p><ul>' +
     '<li>Deborah and Patrick rate contributions: RWF 250 each</li>' +
     '<li>Eric rate contribution: RWF 2,000; Charlotte rate contribution: RWF 1,500</li>' +
-    '<li>Eric October savings contribution: RWF 50,000; Charlotte: RWF 25,000</li>' +
+    '<li>Eric combined payment: RWF 50,000 savings, RWF 2,000 rate contribution, and RWF 8,100 loan interest; Charlotte: RWF 25,000 savings and RWF 1,500 rate contribution</li>' +
     '<li>Eric loan interest repayment: RWF 8,100</li>' +
-    '<li>Jules first-month loan interest credited: RWF 8,100</li><li>Candide first-month loan interest credited: RWF 16,800</li></ul>' +
+    '<li>Jules first-cycle loan interest credited: RWF 8,100</li><li>Candide first-cycle loan interest credited: RWF 16,800</li></ul>' +
     '<div class="grid2">' + (S.savings.some(row => row.personId === "jules" && row.period === "2026-10" && Number(row.amount) === 58100)
       ? dateInput("julesInterest", "Jules combined payment date", validOctoberPaymentDate(existingBookPaymentDate("jules:savings"))
         ? existingBookPaymentDate("jules:savings") : "") : "") +
@@ -2099,7 +2130,7 @@ function requestModal() {
         esc(purpose) + '</textarea></label>' +
       '<div class="calcout" id="r_quote"></div>' +
       '<p class="hint">Your member agreement uses your recorded monthly contribution of ' + money(monthlyOf(applicant)) +
-        '. Interest accrues at ' + (cfg().interestRate * 100) + '% per month on outstanding principal from the actual payout date; repayment is due within ' +
+        '. Interest accrues at ' + (cfg().interestRate * 100) + '% for each completed 45-day cycle on outstanding principal, starting on final approval. Repayment is due within ' +
         cfg().repaymentDays + ' days after payout. Approval is President, Vice President, then Secretary.</p>' +
       '<p class="mini"><a href="loan-agreement-template.pdf" target="_blank" rel="noopener">Read the full loan agreement terms (PDF)</a></p>' +
       '<label class="f"><span><input type="checkbox" id="r_terms_accept" data-act="loan-terms"' +
@@ -2152,8 +2183,8 @@ function refreshQuote() {
   if (!amt) { q.innerHTML = '<div class="muted">Enter an amount to see the interest and what you would repay.</div>'; return; }
   const k = quoteLoan(amt), errs = validateLoanRequest(pid, amt);
   q.innerHTML = '<div><span>Loan</span><b>' + money(k.principal) + '</b></div>' +
-    '<div><span>First month interest at ' + (cfg().interestRate * 100) + '% / month</span><b>' + money(k.interest) + '</b></div>' +
-    '<div class="total"><span>First month total (repay within ' + k.days + ' days)</span><b>' + money(k.total) + '</b></div>' +
+    '<div><span>First 45-day cycle interest at ' + (cfg().interestRate * 100) + '%</span><b>' + money(k.interest) + '</b></div>' +
+    '<div class="total"><span>Principal plus first cycle (repayment due within ' + k.days + ' days of payout)</span><b>' + money(k.total) + '</b></div>' +
     (errs.length ? '<div style="color:var(--red);padding-top:8px">' + esc(errs[0]) + '</div>' : "");
 }
 
@@ -2178,7 +2209,8 @@ function disburseModal(m) {
       '. The ' + (l.days || cfg().repaymentDays) + '-day clock starts on this date.</p>' +
       '<label class="f"><span>Date the money was handed over</span><input type="date" id="d_date" value="' + todayISO() + '"></label>' +
       '<div class="calcout"><div><span>Due date</span><b id="d_due">' + fmtDate(addDays(todayISO(), l.days || cfg().repaymentDays)) + '</b></div>' +
-      '<div class="total"><span>First month total</span><b>' + money((Number(l.principal) || 0) + loanInterestDue(l)) + '</b></div></div>',
+      '<div class="total"><span>Principal plus first 45-day interest estimate</span><b>' +
+        money((Number(l.principal) || 0) + (Number(l.interest) || 0)) + '</b></div></div>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="dodisburse" data-id="' + l.id + '">Confirm payout</button>' };
 }
 function repayModal(m) {
@@ -2595,7 +2627,9 @@ async function onAct(act, el) {
     if (l.status === "pending_first") { a.first = stamp; next = "pending_second"; }
     else if (l.status === "pending_second") { a.second = stamp; next = "pending_supervisor"; }
     else if (l.status === "pending_supervisor") { a.supervisor = stamp; next = "approved"; }
-    await put("loans/" + l.id, Object.assign({}, l, { approvals: a, status: next }));
+    await put("loans/" + l.id, Object.assign({}, l, {
+      approvals: a, status: next, approvedAt: next === "approved" ? stamp.at : l.approvedAt
+    }));
     await logEvent("loan", "Approved " + l.number);
     toast(next === "approved" ? "Approved in full" : "Approved, passed on"); return;
   }
@@ -2611,8 +2645,10 @@ async function onAct(act, el) {
     const l = S.loans.find(x => x.id === id);
     if (!l) return;
     const when = val("d_date") || todayISO();
-    await put("loans/" + l.id, Object.assign({}, l, { status: "disbursed", disbursedAt: when,
-      dueDate: addDays(when, l.days || cfg().repaymentDays), disbursedBy: me().name }));
+    await put("loans/" + l.id, Object.assign({}, l, {
+      status: "disbursed", approvedAt: l.approvedAt || (l.approvals && l.approvals.supervisor && l.approvals.supervisor.at) || when,
+      disbursedAt: when, dueDate: addDays(when, l.days || cfg().repaymentDays), disbursedBy: me().name
+    }));
     await logEvent("loan", "Paid out " + money(l.principal) + " on " + l.number);
     S.modal = null; toast("Money recorded as paid out"); return;
   }
@@ -2907,7 +2943,7 @@ async function createLoanAgreementPdf(loan) {
   write("Read this loan-specific record together with the attached IKIMINA SAVINGS AND LOAN AGREEMENT. For this application, the member-specific and dashboard-configured terms below replace conflicting general examples and approval-role wording in the template.", 9.5, regular, 13);
 
   heading("Updated rules for this application");
-  write("The member's monthly savings contribution is the amount in their member ledger, not a fixed group-wide amount. Loan approvals proceed in order: President, Vice President, then Secretary. An officer may approve a stage assigned to their current role; no member may approve their own loan. Interest accrues at the configured monthly rate on outstanding principal beginning on the actual disbursement date. The repayment period starts at disbursement, and the due date is calculated when the loan is paid out.", 9.5, regular, 13);
+  write("The member's monthly savings contribution is the amount in their member ledger, not a fixed group-wide amount. Loan approvals proceed in order: President, Vice President, then Secretary. An officer may approve a stage assigned to their current role; no member may approve their own loan. Interest accrues at the configured rate for each completed 45-day cycle on outstanding principal, starting on final approval. The repayment period starts at disbursement, and the due date is calculated when the loan is paid out.", 9.5, regular, 13);
 
   heading("Member and group");
   field("Group", cfg().groupName);
@@ -2924,10 +2960,11 @@ async function createLoanAgreementPdf(loan) {
   field("Savings at request", money(loan.savingsAtRequest || totalSaved(loan.personId)));
   field("Maximum eligible amount", money(loan.maxAtRequest || maxLoanFor(loan.personId)));
   field("Requested principal", money(loan.principal));
-  field("Monthly interest rate", loanRate + "% on outstanding principal");
-  field("First-month interest estimate", money(firstInterest));
-  field("First-month total estimate", money((Number(loan.principal) || 0) + firstInterest));
+  field("Interest rate per 45-day cycle", loanRate + "% on outstanding principal");
+  field("First-cycle interest estimate", money(firstInterest));
+  field("First-cycle total estimate", money((Number(loan.principal) || 0) + firstInterest));
   field("Repayment period", (loan.days || cfg().repaymentDays) + " days from actual disbursement");
+  field("Interest start date (final approval)", fmtDate(loanInterestStartDate(loan)));
   field("Disbursement date", loan.disbursedAt ? fmtDate(loan.disbursedAt) : "Not yet disbursed");
   field("Due date", loan.dueDate ? fmtDate(loan.dueDate) : "Set when the loan is disbursed");
   field("Current application status", STATE_LABEL[loan.status] || loan.status || "Draft");
