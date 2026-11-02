@@ -260,9 +260,9 @@ input[type=password]{width:100%;padding:9px 11px;border:1px solid var(--line);bo
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ====== loaded from .env by the local server for testing ====== */
-window.SUPABASE_URL = "https://vwruauifkbdzaqkeikan.supabase.co";
-window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3cnVhdWlma2JkemFxa2Vpa2FuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk4OTA3NzAsImV4cCI6MjEwNTQ2Njc3MH0.DwJXKIPgo9f_n9yweL4eCxGVjulABe7DXMpQBHcQdzc";
+/* Filled by the local server or GitHub Pages deployment workflow. */
+window.SUPABASE_URL = "__SUPABASE_URL__";
+window.SUPABASE_PUBLISHABLE_KEY = "__SUPABASE_PUBLISHABLE_KEY__";
 /* =================================================================================== */
 </script>
 <script>
@@ -284,6 +284,8 @@ const S = {
   settings: null, people: [], savings: [], loans: [], repayments: [],
   payouts: [], events: [], accounts: [], fees: [],
   session: null, route: "dashboard", modal: null, period: null, reportPeriod: null,
+  reportMode: "month", reportStart: null, reportEnd: null,
+  reportGeneratedStart: null, reportGeneratedEnd: null, reportGeneratedAt: null,
   ledgerFor: null, toast: null, formErr: null, busy: false
 };
 let inactivityTimer = null;
@@ -426,6 +428,17 @@ const groupContributions = () => S.savings.reduce((sum, s) => {
 const feesTotal = () => S.fees.reduce((a, f) => a + (Number(f.amount) || 0), 0);
 const monthTotal = per => activePeople().reduce((a, p) => a + savingsFor(p.id, per), 0);
 const monthExpected = per => activePeople().filter(p => memberSince(p) <= per).reduce((a, p) => a + monthlyOf(p), 0);
+const loanInterestReceivedForMember = (personId, from, through) => S.repayments
+  .filter(r => {
+    const loan = S.loans.find(item => item.id === r.loanId);
+    const date = (r.at || "").slice(0, 10);
+    return loan && loan.personId === personId && date >= from && date <= through;
+  })
+  .reduce((sum, r) => sum + splitPart(r, "interest"), 0);
+const rateContributionsForMember = (personId, from, through) => S.fees
+  .filter(f => f.personId === personId && /rate/i.test(f.label || "") &&
+    (f.at || "").slice(0, 10) >= from && (f.at || "").slice(0, 10) <= through)
+  .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
 
 /* ---------- loans ---------- */
 const OPEN_STATES = ["pending_first", "pending_second", "pending_supervisor", "approved", "disbursed"];
@@ -748,12 +761,14 @@ async function boot() {
   S.period = thisPeriod();
   try { S.session = localStorage.getItem("ikimina-session"); } catch (e) {}
 
-  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY || window.SUPABASE_URL.indexOf("YOUR-PROJECT") >= 0) {
+  if (!window.SUPABASE_URL || !window.SUPABASE_PUBLISHABLE_KEY ||
+      window.SUPABASE_URL.indexOf("__SUPABASE_URL__") >= 0 ||
+      window.SUPABASE_PUBLISHABLE_KEY.indexOf("__SUPABASE_PUBLISHABLE_KEY__") >= 0) {
     S.configMissing = true; S.loaded = true; render(); return;
   }
   if (!window.supabase) { S.dbDown = true; S.loaded = true; render(); return; }
 
-  S.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  S.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
 
   try {
     S.settings = await fetchSettings();
@@ -1148,7 +1163,9 @@ function savingsView() {
   const per = S.period || thisPeriod();
   const people = activePeople();
   const collected = monthTotal(per), due = monthExpected(per);
-  const ratePaid = people.reduce((sum, p) => sum + Math.max(0, rawSavingsFor(p.id, per) - monthlyOf(p)), 0);
+  const rateOverpayment = people.reduce((sum, p) => sum + Math.max(0, rawSavingsFor(p.id, per) - monthlyOf(p)), 0);
+  const periodStart = per + "-01", periodEnd = addDays(shiftPeriod(per, 1) + "-01", -1);
+  const ratePaid = people.reduce((sum, p) => sum + rateContributionsForMember(p.id, periodStart, periodEnd), 0);
   const editable = isAdmin() && canWrite();
   return '<div class="pagehead"><div><h2>Savings</h2><p>One sheet per month. Record what each member actually paid in.</p></div>' +
     '<div class="inline" style="flex:0 1 auto"><button class="btn small" data-act="per" data-d="-1">Previous</button>' +
@@ -1160,12 +1177,13 @@ function savingsView() {
       '<div class="stat"><b>' + money(collected) + '</b><small>Collected in ' + fmtPeriodShort(per) + '</small></div>' +
       '<div class="stat"><b>' + money(due) + '</b><small>Expected</small></div>' +
       '<div class="stat"><b>' + money(ratePaid) + '</b><small>Rate paid in ' + fmtPeriodShort(per) + '</small></div>' +
+      '<div class="stat"><b>' + money(rateOverpayment) + '</b><small>Contribution overpayment credit</small></div>' +
       '<div class="stat"><b>' + money(Math.max(0, due - collected)) + '</b><small>Still outstanding</small></div>' +
     '</div>' +
     '<section class="panel"><header><div><h3>' + fmtPeriod(per) + '</h3>' +
       '<p>' + (editable ? "Type the total received, including any rate payment above the normal contribution." : "Admins record payments here.") + '</p></div>' +
       '<button class="btn small" data-act="csv" data-p="' + per + '">Export CSV</button></header>' +
-    (people.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Due</th><th class="num">Contribution paid</th><th class="num">Rate paid</th><th>Status</th>' +
+    (people.length ? '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Due</th><th class="num">Contribution paid</th><th class="num">Interest Paid</th><th>Status</th>' +
       (editable ? "<th></th>" : "") + '</tr></thead><tbody>' + people.map(p => {
         const req = monthlyOf(p), amt = savingsFor(p.id, per), total = rawSavingsFor(p.id, per);
         const ratePaid = Math.max(0, total - amt), st = savingStatus(amt, req);
@@ -1173,7 +1191,8 @@ function savingsView() {
         return '<tr><td class="name">' + esc(p.name) + (yet ? "" : '<div class="mini">joined later</div>') + '</td>' +
           '<td class="num muted">' + (yet ? num(req) : "\u2014") + '</td>' +
           '<td class="num">' + (editable && yet ? '<input type="number" id="sv_' + p.id + '" value="' + total + '" style="max-width:130px;text-align:right">' : num(amt)) + '</td>' +
-          '<td class="num">' + num(ratePaid) + '</td>' +
+          '<td class="num"><span>Loan interest: ' + money(loanInterestReceivedForMember(p.id, periodStart, periodEnd)) +
+            '</span><br><span>Rate contribution: ' + money(rateContributionsForMember(p.id, periodStart, periodEnd)) + '</span></td>' +
           '<td><span class="dot ' + (st === "paid" ? "ok" : st === "partial" ? "part" : "no") + '">' +
             (st === "paid" ? "Paid" : st === "partial" ? "Part paid" : "Not paid") + '</span></td>' +
           (editable ? '<td class="num"><div class="rowacts">' + (yet ?
@@ -1223,52 +1242,158 @@ function rateContributionsView() {
     '<p class="hint">The daily penalty is 1% of the unpaid contribution amount, so it changes as contributions are paid. A member with no unpaid amount has no current daily penalty; once a contribution is paid, its daily accrual stops on the payment date. Unpaid contributions continue accruing through today. Rate contributions received shows recorded rate-fee payments; contribution overpayments are applied as credits separately, so they can reduce penalty outstanding without inflating the received total. Penalty outstanding cannot fall below zero, and extra credit remains available after the penalty is covered. Officers can override the displayed totals using Manual adjustment. Extra payments cover the accrued penalty first, then loan interest at each loan\u2019s monthly rate on its outstanding principal. Loan interest credited from repayments is shown separately from rate-based loan interest credits and advance contribution interest credit.</p>';
 }
 
-function buildReportData(period) {
-  const people = activePeople().map(p => {
-    const rate = rateDetails(p);
-    const loans = loansOf(p.id);
+function reportTransactions() {
+  const rows = [], undated = [];
+  const add = (date, person, category, amount, cashDelta, details) => {
+    const isoDate = (date || "").slice(0, 10);
+    const row = { date: isoDate, personId: person ? person.id : null, member: person ? person.name : "Group", category, amount: Math.round(Number(amount) || 0),
+      cashDelta: Math.round(Number(cashDelta) || 0), details: details || "" };
+    if (!isoDate) undated.push(row);
+    else rows.push(row);
+  };
+  for (const saving of S.savings) {
+    const person = personById(saving.personId), amount = Math.max(0, Number(saving.amount) || 0);
+    const contribution = Math.min(amount, monthlyOf(person)), overpayment = Math.max(0, amount - contribution);
+    if (contribution) add(saving.recordedAt, person, "Savings contribution", contribution, contribution, saving.period);
+    if (overpayment) add(saving.recordedAt, person, "Contribution overpayment credit", overpayment, overpayment, saving.period);
+  }
+  for (const fee of S.fees) {
+    const rate = /rate/i.test(fee.label || "");
+    add(fee.at, personById(fee.personId), rate ? "Rate contribution" : (fee.label || "Other fee"), fee.amount, fee.amount, fee.label || "");
+  }
+  for (const repayment of S.repayments) {
+    const loan = S.loans.find(item => item.id === repayment.loanId);
+    const person = loan ? personById(loan.personId) : null;
+    const principal = splitPart(repayment, "principal"), interest = splitPart(repayment, "interest");
+    if (interest) add(repayment.at, person, "Loan interest repayment", interest, interest, loan && loan.number);
+    if (principal) add(repayment.at, person, "Loan principal repayment", principal, principal, loan && loan.number);
+    const remainder = Math.max(0, (Number(repayment.amount) || 0) - principal - interest);
+    if (remainder) add(repayment.at, person, "Unallocated loan repayment", remainder, remainder, loan && loan.number);
+  }
+  for (const loan of S.loans) {
+    if (loan.disbursedAt && Number(loan.principal) > 0) {
+      add(loan.disbursedAt, personById(loan.personId), "Loan disbursement", loan.principal, -loan.principal, loan.number);
+    }
+  }
+  for (const payout of S.payouts) {
+    if (payout.type === "cash_expense") {
+      add(payout.at, null, "Expense", payout.total, -(Number(payout.total) || 0), payout.description);
+    } else if (payout.type === "cash_balance_adjustment") {
+      add(payout.at, null, "Cash balance adjustment", payout.total, payout.total, payout.description);
+    } else {
+      add(payout.at, null, "Earnings distribution", payout.total, -(Number(payout.total) || 0), payout.method || "");
+    }
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date) || a.category.localeCompare(b.category) || a.member.localeCompare(b.member));
+  return { rows, undated };
+}
+function validReportMonth(period) {
+  if (!/^\d{4}-\d{2}$/.test(period || "")) return false;
+  const date = new Date(period + "-01T00:00:00Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 7) === period;
+}
+
+function reportLoanInterestDue(loan, asOf) {
+  if (!loan.disbursedAt || loan.disbursedAt > asOf) return 0;
+  const rate = Number.isFinite(Number(loan.rate)) ? Number(loan.rate) : 0.03;
+  let due = Number(loan.interest) || 0;
+  for (let month = 2, nextDue = addMonths(loan.disbursedAt, month); nextDue <= asOf; month++, nextDue = addMonths(loan.disbursedAt, month)) {
+    if (loan.closedAt && loan.closedAt < nextDue) break;
+    due += Math.round(Math.max(0, Number(loan.principal) - principalRepaidAt(loan, nextDue)) * rate);
+  }
+  return due;
+}
+
+function reportLoanBalanceAt(loan, asOf) {
+  if (!loan.disbursedAt || loan.disbursedAt > asOf) return 0;
+  const principal = Math.max(0, Number(loan.principal) - principalRepaidAt(loan, asOf));
+  const paidInterest = Math.min(reportLoanInterestDue(loan, asOf), S.repayments
+    .filter(row => row.loanId === loan.id && (row.at || "").slice(0, 10) <= asOf)
+    .reduce((sum, row) => sum + splitPart(row, "interest"), 0));
+  const credits = reportLoanCreditAllocations(loan.personId, asOf)[loan.id] || 0;
+  return Math.max(0, principal + reportLoanInterestDue(loan, asOf) - paidInterest - credits);
+}
+
+function reportLoanCreditAllocations(personId, asOf) {
+  const person = personById(personId);
+  let credit = person ? rateDetails(person, asOf).loanInterestCredit : 0;
+  const byLoan = {};
+  const loans = loansOf(personId).filter(loan => loan.disbursedAt && loan.disbursedAt <= asOf)
+    .slice().sort((a, b) => (a.disbursedAt || "").localeCompare(b.disbursedAt || ""));
+  for (const loan of loans) {
+    const paid = S.repayments.filter(row => row.loanId === loan.id && (row.at || "").slice(0, 10) <= asOf)
+      .reduce((sum, row) => sum + splitPart(row, "interest"), 0);
+    const remainingInterest = Math.max(0, reportLoanInterestDue(loan, asOf) - paid);
+    byLoan[loan.id] = Math.min(credit, remainingInterest);
+    credit -= byLoan[loan.id];
+  }
+  return byLoan;
+}
+
+function buildReportData(startPeriod, endPeriod) {
+  const start = startPeriod + "-01";
+  const end = addDays(shiftPeriod(endPeriod, 1) + "-01", -1);
+  const all = reportTransactions();
+  const inPeriod = all.rows.filter(row => row.date >= start && row.date <= end);
+  const before = all.rows.filter(row => row.date < start);
+  const openingBalance = before.reduce((sum, row) => sum + row.cashDelta, 0);
+  const totals = {
+    required: 0,
+    contributions: inPeriod.filter(row => row.category === "Savings contribution").reduce((sum, row) => sum + row.amount, 0),
+    savings: 0,
+    ratePaid: inPeriod.filter(row => row.category === "Rate contribution").reduce((sum, row) => sum + row.amount, 0),
+    rateOutstanding: 0,
+    loansOutstanding: S.loans.reduce((sum, loan) => sum + reportLoanBalanceAt(loan, end), 0),
+    interestCollected: inPeriod.filter(row => row.category === "Loan interest repayment").reduce((sum, row) => sum + row.amount, 0),
+    cashExpenses: inPeriod.filter(row => row.category === "Expense").reduce((sum, row) => sum + row.amount, 0),
+    loansDisbursed: inPeriod.filter(row => row.category === "Loan disbursement").reduce((sum, row) => sum + row.amount, 0),
+    loanRepayments: inPeriod.filter(row => /repayment/i.test(row.category))
+      .reduce((sum, row) => sum + row.amount, 0),
+    cashReceived: inPeriod.reduce((sum, row) => sum + Math.max(0, row.cashDelta), 0),
+    cashPaid: inPeriod.reduce((sum, row) => sum + Math.max(0, -row.cashDelta), 0),
+    netCashMovement: inPeriod.reduce((sum, row) => sum + row.cashDelta, 0)
+  };
+  const closingBalance = openingBalance + totals.netCashMovement;
+  const people = activePeople().map(person => {
+    const rate = rateDetails(person, end);
+    const personRows = inPeriod.filter(row => row.personId === person.id);
+    const loansOutstanding = loansOf(person.id).reduce((sum, loan) => sum + reportLoanBalanceAt(loan, end), 0);
+    const required = periodRange(startPeriod, endPeriod)
+      .filter(period => memberSince(person) <= period).reduce((sum) => sum + monthlyOf(person), 0);
     return {
-      person: p,
-      required: memberSince(p) <= period ? monthlyOf(p) : 0,
-      contribution: savingsFor(p.id, period),
-      savings: totalSaved(p.id),
+      person, required,
+      contribution: personRows.filter(row => row.category === "Savings contribution").reduce((sum, row) => sum + row.amount, 0),
+      savings: totalSaved(person.id),
       chargeableDays: rate.lateDays,
-      ratePaid: rate.paid,
+      ratePaid: personRows.filter(row => row.category === "Rate contribution").reduce((sum, row) => sum + row.amount, 0),
       rateOutstanding: rate.outstanding,
-      loanBalance: loans.reduce((sum, loan) => sum + loanBalance(loan), 0)
+      loanBalance: loansOutstanding,
+      loanInterestPaid: personRows.filter(row => row.category === "Loan interest repayment").reduce((sum, row) => sum + row.amount, 0)
     };
   });
+  totals.required = people.reduce((sum, row) => sum + row.required, 0);
+  totals.rateOutstanding = people.reduce((sum, row) => sum + row.rateOutstanding, 0);
+  totals.savings = people.reduce((sum, row) => sum + row.savings, 0);
   const loans = S.loans.map(loan => ({
-    loan,
-    person: personById(loan.personId),
-    interestPaid: loanInterestPaid(loan.id),
-    balance: loanBalance(loan)
-  }));
+    loan, person: personById(loan.personId),
+    interestPaid: S.repayments.filter(row => row.loanId === loan.id && (row.at || "").slice(0, 10) >= start && (row.at || "").slice(0, 10) <= end)
+      .reduce((sum, row) => sum + splitPart(row, "interest"), 0),
+    balance: reportLoanBalanceAt(loan, end)
+  })).filter(row => row.balance > 0 || (row.loan.disbursedAt >= start && row.loan.disbursedAt <= end));
   return {
-    period,
-    people,
-    loans,
-    totals: {
-      required: people.reduce((sum, row) => sum + row.required, 0),
-      contributions: people.reduce((sum, row) => sum + row.contribution, 0),
-      savings: people.reduce((sum, row) => sum + row.savings, 0),
-      ratePaid: people.reduce((sum, row) => sum + row.ratePaid, 0),
-      rateOutstanding: people.reduce((sum, row) => sum + row.rateOutstanding, 0),
-      loansOutstanding: loans.reduce((sum, row) => sum + row.balance, 0),
-      interestCollected: interestCollected(),
-      cashExpenses: cashExpenses(),
-      cashAvailable: cashAvailable()
-    }
+    startPeriod, endPeriod, start, end, rows: inPeriod, undated: all.undated,
+    openingBalance, closingBalance, openingIsDerived: true, people, loans, totals,
+    generatedAt: todayISO()
   };
 }
 
 function reportMemberTable(rows) {
   return '<div class="scroll"><table><thead><tr><th>Member</th><th class="num">Monthly due</th>' +
-    '<th class="num">Contribution</th><th class="num">Savings to date</th><th class="num">Chargeable days</th>' +
+    '<th class="num">Contribution</th><th class="num">Loan interest paid</th><th class="num">Savings to date</th><th class="num">Chargeable days</th>' +
     '<th class="num">Rate contributions received</th><th class="num">Rate outstanding</th><th class="num">Loan balance</th>' +
     '</tr></thead><tbody>' + rows.map(row =>
       '<tr><td>' + esc(row.person.name) + '</td><td class="num">' + money(row.required) +
-      '</td><td class="num">' + money(row.contribution) + '</td><td class="num">' + money(row.savings) +
+      '</td><td class="num">' + money(row.contribution) + '</td><td class="num">' + money(row.loanInterestPaid) + '</td><td class="num">' + money(row.savings) +
       '</td><td class="num">' + num(row.chargeableDays) + '</td><td class="num">' + money(row.ratePaid) +
       '</td><td class="num">' + money(row.rateOutstanding) + '</td><td class="num">' + money(row.loanBalance) + '</td></tr>'
     ).join("") + '</tbody></table></div>';
@@ -1286,33 +1411,70 @@ function reportLoanTable(rows) {
     ).join("") + '</tbody></table></div>';
 }
 
+function reportTransactionsTable(rows) {
+  return '<div class="scroll"><table><thead><tr><th>Date</th><th>Member</th><th>Category</th><th>Details</th>' +
+    '<th class="num">Amount (RWF)</th><th class="num">Cash movement (RWF)</th></tr></thead><tbody>' +
+    (rows.length ? rows.map(row =>
+      '<tr><td>' + fmtDate(row.date) + '</td><td>' + esc(row.member) + '</td><td>' + esc(row.category) +
+      '</td><td>' + esc(row.details) + '</td><td class="num">' + money(row.amount) +
+      '</td><td class="num">' + money(row.cashDelta) + '</td></tr>'
+    ).join("") : '<tr><td colspan="6">No dated transactions in this reporting period.</td></tr>') +
+    '</tbody></table></div>';
+}
+
 function reportsView() {
   if (!isAdmin()) return '<div class="panel"><div class="empty"><b>Reports are for officers</b>Sign in with a President, Vice President, or Secretary account to access reports.</div></div>';
-  const period = S.reportPeriod || S.period || thisPeriod();
-  S.reportPeriod = period;
-  const report = buildReportData(period), t = report.totals;
+  const defaultPeriod = S.reportPeriod || S.period || thisPeriod();
+  const startPeriod = S.reportStart || defaultPeriod;
+  const endPeriod = S.reportEnd || defaultPeriod;
+  S.reportStart = startPeriod;
+  S.reportEnd = endPeriod;
+  const generated = S.reportGeneratedStart && S.reportGeneratedEnd
+    ? buildReportData(S.reportGeneratedStart, S.reportGeneratedEnd) : null;
+  const t = generated && generated.totals;
+  const periodLabel = generated
+    ? (generated.startPeriod === generated.endPeriod ? fmtPeriod(generated.startPeriod) :
+      fmtPeriod(generated.startPeriod) + " to " + fmtPeriod(generated.endPeriod))
+    : "Select a period and generate a report";
   return '<div class="report-document">' +
-    '<div class="pagehead"><div><h2>Group report</h2><p>' + esc(cfg().groupName) + ' · ' + fmtPeriod(period) +
-      ' · Generated ' + fmtDate(todayISO()) + '</p></div>' +
+    '<div class="pagehead"><div><h2>Group financial report</h2><p>' + esc(cfg().groupName) + ' · ' + esc(periodLabel) +
+      (generated ? ' · Generated ' + fmtDate(S.reportGeneratedAt || todayISO()) : "") + '</p></div>' +
       '<div class="inline report-controls noprint" style="flex:0 1 auto">' +
-      '<label class="f"><span>Contribution month</span><input type="month" data-act="reportperiod" value="' + esc(period) + '"></label>' +
-      '<button class="btn" data-act="report-excel">Download Excel</button>' +
-      '<button class="btn primary" data-act="report-pdf">Save as PDF</button></div></div>' +
-    '<div class="grid2" style="margin-bottom:18px">' +
-      '<div class="stat"><b>' + money(t.contributions) + '</b><small>Contributions in ' + fmtPeriodShort(period) + ' of ' + money(t.required) + ' expected</small></div>' +
-      '<div class="stat"><b>' + money(t.savings) + '</b><small>Member savings to date</small></div>' +
-      '<div class="stat"><b>' + money(t.ratePaid) + '</b><small>Rate contributions received</small></div>' +
-      '<div class="stat"><b>' + money(t.rateOutstanding) + '</b><small>Rate outstanding</small></div>' +
-      '<div class="stat"><b>' + money(t.loansOutstanding) + '</b><small>Outstanding loan balances</small></div>' +
-      '<div class="stat"><b>' + money(t.interestCollected) + '</b><small>Interest collected</small></div>' +
-      '<div class="stat"><b>' + money(t.cashExpenses) + '</b><small>Transaction costs, all time</small></div>' +
-      '<div class="stat"><b>' + money(t.cashAvailable) + '</b><small>Cash available</small></div>' +
-    '</div>' +
-    '<section class="panel"><header><div><h3>Member contributions and balances</h3><p>Chargeable days are calculated through today.</p></div></header>' +
-      reportMemberTable(report.people) + '</section>' +
-    '<section class="panel"><header><div><h3>Loans</h3></div></header>' +
-      (report.loans.length ? reportLoanTable(report.loans) : '<div class="empty">No loans recorded.</div>') + '</section>' +
-    '<p class="mini">Generated by ' + esc(me().name) + ' · ' + esc(roleLabel(myRole())) + '</p>' +
+      '<label class="f"><span>Report type</span><select data-act="report-mode"><option value="month"' + (S.reportMode === "month" ? " selected" : "") +
+        '>Single month</option><option value="range"' + (S.reportMode === "range" ? " selected" : "") + '>Custom month range</option></select></label>' +
+      (S.reportMode === "month"
+        ? '<label class="f"><span>Month</span><input type="month" data-act="report-month" value="' + esc(endPeriod) + '"></label>'
+        : '<label class="f"><span>Starting month</span><input type="month" data-act="report-start" value="' + esc(startPeriod) + '"></label>' +
+          '<label class="f"><span>Ending month</span><input type="month" data-act="report-end" value="' + esc(endPeriod) + '"></label>') +
+      '<button class="btn primary" data-act="report-generate">Generate Report</button>' +
+      (generated ? '<button class="btn" data-act="report-excel">Download Excel</button>' +
+        '<button class="btn" data-act="report-pdf">Download PDF</button>' : '') + '</div></div>' +
+    (generated ? '<p class="hint">Opening and closing balances are derived from dated records because no verified opening balance was provided. Historical entries without dates are excluded and listed for reconciliation.</p>' +
+      '<div class="grid2" style="margin-bottom:18px">' +
+        '<div class="stat"><b>' + money(generated.openingBalance) + '</b><small>Opening balance (derived)</small></div>' +
+        '<div class="stat"><b>' + money(t.contributions) + '</b><small>Savings contributions received</small></div>' +
+        '<div class="stat"><b>' + money(t.ratePaid) + '</b><small>Rate contributions received</small></div>' +
+        '<div class="stat"><b>' + money(t.interestCollected) + '</b><small>Loan interest earned</small></div>' +
+        '<div class="stat"><b>' + money(t.loansDisbursed) + '</b><small>Loans disbursed</small></div>' +
+        '<div class="stat"><b>' + money(t.loanRepayments) + '</b><small>Loan repayments received</small></div>' +
+        '<div class="stat"><b>' + money(t.loansOutstanding) + '</b><small>Loan balances at period end</small></div>' +
+        '<div class="stat"><b>' + money(t.cashExpenses) + '</b><small>Expenses in period</small></div>' +
+        '<div class="stat"><b>' + money(generated.closingBalance) + '</b><small>Closing balance (derived)</small></div>' +
+        '<div class="stat"><b>' + money(t.netCashMovement) + '</b><small>Net cash movement</small></div>' +
+      '</div>' +
+      '<p class="' + (generated.undated.length ? 'err' : 'hint') + '">' +
+        (generated.undated.length
+          ? generated.undated.length + ' historical transaction(s) have no date and were excluded; update their source records to include them in a period report.'
+          : 'Cash flow reconciles: opening balance plus recorded receipts less recorded payments equals closing balance.') +
+      '</p>' +
+      '<section class="panel"><header><div><h3>Transaction details</h3><p>' + esc(generated.start) + ' to ' + esc(generated.end) + '</p></div></header>' +
+        reportTransactionsTable(generated.rows) + '</section>' +
+      '<section class="panel"><header><div><h3>Member activity and balances</h3><p>Loan balances are calculated at the end of the selected period.</p></div></header>' +
+        reportMemberTable(generated.people) + '</section>' +
+      '<section class="panel"><header><div><h3>Outstanding loans at period end</h3></div></header>' +
+        (generated.loans.length ? reportLoanTable(generated.loans) : '<div class="empty">No active loan balances at period end.</div>') + '</section>' +
+      '<p class="mini">Generated by ' + esc(me().name) + ' · ' + esc(roleLabel(myRole())) + '</p>'
+      : '<section class="panel"><div class="empty">Choose a month or month range, then select Generate Report.</div></section>') +
     '</div>';
 }
 
@@ -1690,6 +1852,35 @@ function rateAdjustmentModal(m) {
       '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="save-rate-adjustment" data-id="' + esc(p.id) + '">Save adjustment</button>'
   };
 }
+function validOctoberPaymentDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "") || value.slice(0, 7) !== "2026-10") return false;
+  const date = new Date(value + "T00:00:00Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function bookPaymentDate(key, existingDate) {
+  const selected = S.modal && S.modal.paymentDates && S.modal.paymentDates[key];
+  const date = selected || existingDate || "";
+  if (!validOctoberPaymentDate(date)) {
+    throw new Error("Choose the actual October 2026 payment date for " + key.replace(/([A-Z])/g, " $1").toLowerCase() + ".");
+  }
+  return date;
+}
+function existingBookPaymentDate(key) {
+  const [personId, category] = key.split(":");
+  if (category === "savings") {
+    const row = S.savings.find(item => item.personId === personId && item.period === "2026-10");
+    return row && row.recordedAt ? row.recordedAt.slice(0, 10) : "";
+  }
+  if (category === "rate") {
+    const rows = S.fees.filter(item => item.personId === personId && /rate/i.test(item.label || "") &&
+      item.at && item.at.slice(0, 7) === "2026-10");
+    return rows.length === 1 ? (rows[0].at || "").slice(0, 10) : "";
+  }
+  const loan = S.loans.find(item => item.personId === personId);
+  const rows = loan ? S.repayments.filter(item => item.loanId === loan.id && Number(item.amount) === 8100 &&
+    item.at && item.at.slice(0, 7) === "2026-10") : [];
+  return rows.length === 1 ? (rows[0].at || "").slice(0, 10) : "";
+}
 function bookCorrectionsPlan() {
   const feeSpecs = [
     { id: "fee_deborah_2026-10", personId: "deborah", amount: 250, at: "2026-10-17" },
@@ -1697,15 +1888,30 @@ function bookCorrectionsPlan() {
   ];
   const repaymentSpecs = [
     { id: "repay_book_jules_first_interest", personId: "jules", loanId: "loan_jules", amount: 8100 },
-    { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 }
+    { id: "repay_book_candide_first_interest", personId: "candide", loanId: "loan_candide", amount: 16800 },
+    { id: "repay_book_eric_october_interest", personId: "eric", loanId: "loan_eric", amount: 8100,
+      at: bookPaymentDate("ericInterest", existingBookPaymentDate("eric:interest")) }
   ];
-  const octoberSavingsSpecs = BOOK.filter(b => !["eric", "charlotte"].includes(b.id)).map(b => {
-    const at = b.id === "patrick" ? "2026-10-16" : "2026-10-15";
+  const octoberSavingsSpecs = BOOK.map(b => {
+    const isAddedPayment = b.id === "eric" || b.id === "charlotte";
+    const at = isAddedPayment
+      ? bookPaymentDate(b.id + "Savings", existingBookPaymentDate(b.id + ":savings"))
+      : (b.id === "patrick" ? "2026-10-16" : "2026-10-15");
     return {
       id: b.id + "__2026-10", personId: b.id, period: "2026-10", amount: b.monthly,
-      recordedAt: at + "T12:00:00.000Z", recordedBy: "Contribution book"
+      recordedAt: at + "T12:00:00.000Z", recordedBy: isAddedPayment ? "October payment update" : "Contribution book",
+      isAddedPayment
     };
   });
+  for (const [personId, key, amount] of [["eric", "ericRate", 2000], ["charlotte", "charlotteRate", 1500]]) {
+    const existing = S.fees.filter(item => item.personId === personId && /rate/i.test(item.label || ""));
+    if (existing.length > 1) throw new Error("More than one rate payment is already recorded for " + personId + "; review those records first.");
+    feeSpecs.push({
+      id: "fee_" + personId + "_2026-10", personId, amount,
+      at: bookPaymentDate(key, existing.length === 1 ? (existing[0].at || "").slice(0, 10) : ""),
+      isAddedPayment: true
+    });
+  }
   const fees = [], feeDeletions = [], repayments = [], savings = [];
 
   for (const spec of octoberSavingsSpecs) {
@@ -1716,62 +1922,70 @@ function bookCorrectionsPlan() {
       savings.push(spec);
     } else if (Number(existing.amount) !== spec.amount) {
       throw new Error("The October contribution recorded for " + spec.personId + " does not match the contribution book; review it first.");
-    } else if ((existing.recordedAt || "").slice(0, 10) !== spec.recordedAt.slice(0, 10) ||
-      existing.recordedBy !== "Contribution book") {
-      savings.push(Object.assign({}, existing, spec, { id: existing.id }));
+    } else if ((existing.recordedAt || "").slice(0, 10) !== spec.recordedAt.slice(0, 10)) {
+      throw new Error("An October contribution for " + spec.personId + " already exists on a different date; review it rather than replacing it.");
+    } else if (!spec.isAddedPayment && existing.recordedBy !== "Contribution book") {
+      throw new Error("An October contribution for " + spec.personId + " exists with a different source; review it rather than replacing it.");
     }
-  }
-  for (const pid of ["eric", "charlotte"]) {
-    const matches = S.savings.filter(s => s.personId === pid && s.period === "2026-10" && (Number(s.amount) || 0) > 0);
-    if (matches.length) throw new Error("An October contribution is recorded for " + pid + ", but the book shows it unpaid; review it before reconciling.");
   }
 
   for (const spec of feeSpecs) {
-    const personFees = S.fees.filter(f => f.personId === spec.personId && /rate/i.test(f.label || ""));
+    const allPersonFees = S.fees.filter(f => f.personId === spec.personId && /rate/i.test(f.label || ""));
+    if (spec.isAddedPayment && allPersonFees.some(f => !f.at)) {
+      throw new Error("An undated rate payment exists for " + spec.personId + "; review it before adding an October payment.");
+    }
+    const personFees = spec.isAddedPayment
+      ? allPersonFees.filter(f => f.at.slice(0, 7) === "2026-10")
+      : allPersonFees;
     if (personFees.length > 1) throw new Error("More than one rate payment is already recorded for " + spec.personId + "; review those records first.");
     const existing = personFees[0];
     if (!existing) {
       fees.push(Object.assign({}, spec, { label: "Rate contribution (1%)" }));
+    } else if (spec.isAddedPayment) {
+      if (Number(existing.amount) !== spec.amount || (existing.at || "").slice(0, 10) !== spec.at) {
+        throw new Error("An existing rate payment for " + spec.personId + " differs from the October payment details; review it rather than replacing it.");
+      }
     } else if (existing.id === spec.id) {
       if (Number(existing.amount) !== spec.amount || (existing.at || "").slice(0, 10) !== spec.at) {
-        fees.push(Object.assign({}, existing, spec, { label: "Rate contribution (1%)" }));
+        throw new Error("The existing rate payment for " + spec.personId + " differs from the book entry; review it rather than replacing it.");
       }
     } else if (Number(existing.amount) !== spec.amount || (existing.at || "").slice(0, 7) !== spec.at.slice(0, 7)) {
       throw new Error("An existing rate payment for " + spec.personId + " does not match the expected book entry; review it first.");
     }
   }
-  const chadiaRateFees = S.fees.filter(f => f.personId === "chadia" && /rate/i.test(f.label || ""));
-  if (chadiaRateFees.length > 1) throw new Error("Multiple rate contributions are recorded for Chadia; review them before replacing the book entry.");
-  if (chadiaRateFees.length === 1) {
-    const oldChadiaFee = chadiaRateFees[0];
-    if (oldChadiaFee.id !== "fee_chadia" || Number(oldChadiaFee.amount) !== 250 ||
-        (oldChadiaFee.at || "").slice(0, 10) !== "2026-09-01") {
-      throw new Error("Chadia's existing rate contribution does not match the old book entry; review it before replacing it.");
-    }
-    feeDeletions.push(oldChadiaFee);
-  }
-
   for (const spec of repaymentSpecs) {
     if (!S.loans.some(l => l.id === spec.loanId && l.personId === spec.personId)) {
       throw new Error("The expected loan for " + spec.personId + " was not found.");
     }
     const loanPayments = S.repayments.filter(r => r.loanId === spec.loanId);
     const canonical = loanPayments.find(r => r.id === spec.id);
-    const exactPayments = loanPayments.filter(r => Number(r.amount) === spec.amount);
+    const matchingAmount = loanPayments.filter(r => Number(r.amount) === spec.amount);
+    if (spec.personId === "eric" && matchingAmount.some(r => !r.at)) {
+      throw new Error("An undated RWF 8,100 repayment exists for Eric; review it before adding an October payment.");
+    }
+    const exactPayments = spec.personId === "eric"
+      ? matchingAmount.filter(r => (r.at || "").slice(0, 7) === "2026-10")
+      : matchingAmount;
     if (exactPayments.length > 1 || (canonical && exactPayments.some(r => r.id !== canonical.id))) {
       throw new Error("Duplicate matching interest payments exist for " + spec.personId + "; review them first.");
     }
     if (canonical) {
       if (Number(canonical.amount) !== spec.amount || Number(canonical.principal) !== 0 || Number(canonical.interest) !== spec.amount) {
-        repayments.push(Object.assign({}, canonical, spec, { principal: 0, interest: spec.amount }));
+        throw new Error("The matching loan interest record for " + spec.personId + " conflicts with the expected amount; review it rather than replacing it.");
+      } else if (spec.personId === "eric" && (canonical.at || "").slice(0, 10) !== spec.at) {
+        throw new Error("Eric's matching loan interest record has a different date; review it rather than replacing it.");
       }
     } else if (exactPayments.length === 1) {
       const existing = exactPayments[0];
-      if (Number(existing.principal) !== 0 || Number(existing.interest) !== spec.amount) {
-        repayments.push(Object.assign({}, existing, spec, { id: existing.id, principal: 0, interest: spec.amount }));
+      if (spec.personId === "eric" && (existing.at || "").slice(0, 10) !== spec.at) {
+        throw new Error("Eric's matching loan interest record has a different date; review it rather than adding a duplicate.");
       }
-    } else if (loanPayments.length === 0) {
-      repayments.push(Object.assign({}, spec, { principal: 0, interest: spec.amount, at: "2026-10-01", by: "Contribution book" }));
+      if (Number(existing.principal) !== 0 || Number(existing.interest) !== spec.amount) {
+        throw new Error("The matching loan interest record for " + spec.personId + " has a different allocation; review it rather than replacing it.");
+      }
+    } else if (loanPayments.length === 0 || spec.personId === "eric") {
+      repayments.push(Object.assign({}, spec, { principal: 0, interest: spec.amount, at: spec.at || "2026-10-01",
+        by: spec.personId === "eric" ? "October payment update" : "Contribution book" }));
     } else {
       throw new Error("Other repayments exist for " + spec.personId + "'s loan, so the first-month interest payment cannot be identified safely.");
     }
@@ -1786,8 +2000,10 @@ function bookCorrectionsTotals(plan) {
     S.repayments = repaymentsBefore.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
     S.savings = savingsBefore.filter(s => !plan.savings.some(u => u.id === s.id)).concat(plan.savings);
     return {
-      rates: Math.round(S.fees.filter(f => /rate/i.test(f.label || "")).reduce((sum, f) => sum + (Number(f.amount) || 0), 0)),
-      interest: Math.round(interestCollected()),
+      rates: Math.round(S.fees.filter(f => /rate/i.test(f.label || "") && (f.at || "").slice(0, 7) === "2026-10")
+        .reduce((sum, f) => sum + (Number(f.amount) || 0), 0)),
+      interest: Math.round(S.repayments.filter(r => (r.at || "").slice(0, 7) === "2026-10")
+        .reduce((sum, r) => sum + splitPart(r, "interest"), 0)),
       chargeableDays: Object.fromEntries(BOOK.map(b => [
         b.id, rateDetails(personById(b.id), BOOK_CHARGEABLE_DAYS_AS_OF).lateDays
       ]))
@@ -1798,28 +2014,51 @@ function bookCorrectionsTotals(plan) {
     S.savings = savingsBefore;
   }
 }
+function expectedOctoberChargeableDays() {
+  const expected = Object.assign({}, BOOK_EXPECTED_CHARGEABLE_DAYS);
+  for (const personId of ["eric", "charlotte"]) {
+    const date = bookPaymentDate(personId + "Savings", existingBookPaymentDate(personId + ":savings"));
+    expected[personId] = date < "2026-10-16" ? 0
+      : date <= BOOK_CHARGEABLE_DAYS_AS_OF
+        ? daysBetween("2026-10-16", date, true) : BOOK_EXPECTED_CHARGEABLE_DAYS[personId];
+  }
+  return expected;
+}
 function bookCorrectionsModal() {
   let plan, totals, problem = "";
   try {
     plan = bookCorrectionsPlan();
     totals = bookCorrectionsTotals(plan);
-    const wrongDays = Object.keys(BOOK_EXPECTED_CHARGEABLE_DAYS)
-      .filter(pid => totals.chargeableDays[pid] !== BOOK_EXPECTED_CHARGEABLE_DAYS[pid]);
-    if (totals.rates !== 500 || totals.interest !== 24900 || wrongDays.length) {
+    const expectedDays = expectedOctoberChargeableDays();
+    const wrongDays = Object.keys(expectedDays)
+      .filter(pid => totals.chargeableDays[pid] !== expectedDays[pid]);
+    if (totals.rates !== 4000 || totals.interest !== 33000 || wrongDays.length) {
       problem = "Applying these entries would leave totals at " + money(totals.rates) + " for rate contributions and " +
-        money(totals.interest) + " for interest earned" +
-        (wrongDays.length ? "; chargeable-day totals do not match the contribution book for " + wrongDays.join(", ") : "") +
+        money(totals.interest) + " for loan interest" +
+        (wrongDays.length ? "; chargeable-day totals do not match the recorded payment dates for " + wrongDays.join(", ") : "") +
         ". No records will be changed; review existing payments first.";
     }
   } catch (e) { problem = e.message; }
   const updates = plan ? plan.fees.length + plan.feeDeletions.length + plan.repayments.length + plan.savings.length : 0;
-  const body = '<p>Reconcile the contribution book with the existing ledger:</p><ul>' +
-    '<li>Deborah rate contribution: RWF 250</li><li>Patrick rate contribution: RWF 250</li>' +
-    '<li>Replace Chadia\u2019s old rate contribution entry</li>' +
-    '<li>October contributions paid by the 15th, except Patrick on the 16th</li>' +
-    '<li>Eric and Charlotte October contributions are unpaid</li>' +
+  const dateInput = (key, label) => {
+    const selected = S.modal && S.modal.paymentDates && S.modal.paymentDates[key];
+    const existing = existingBookPaymentDate(key.replace(/Savings|Rate|Interest$/, "") + ":" +
+      (key.endsWith("Savings") ? "savings" : key.endsWith("Rate") ? "rate" : "interest"));
+    return '<label class="f"><span>' + label + '</span><input type="date" min="2026-10-01" max="2026-10-31" data-act="book-date" data-key="' +
+      esc(key) + '" value="' + esc(selected || existing) + '"></label>';
+  };
+  const body = '<p>Reconcile the recorded contribution book with the ledger. Existing conflicting payments will stop the update rather than be overwritten.</p><ul>' +
+    '<li>Deborah and Patrick rate contributions: RWF 250 each</li>' +
+    '<li>Eric rate contribution: RWF 2,000; Charlotte rate contribution: RWF 1,500</li>' +
+    '<li>Eric October savings contribution: RWF 50,000; Charlotte: RWF 25,000</li>' +
+    '<li>Eric loan interest repayment: RWF 8,100</li>' +
     '<li>Jules first-month loan interest credited: RWF 8,100</li><li>Candide first-month loan interest credited: RWF 16,800</li></ul>' +
-    '<p class="mini">Expected October chargeable days: Candide, Jules, Deborah, Chadia and Ramathan 0; Eric and Charlotte 2; Patrick 1.</p>' +
+    '<div class="grid2">' + dateInput("ericSavings", "Eric savings payment date") +
+      dateInput("ericInterest", "Eric loan-interest payment date") +
+      dateInput("ericRate", "Eric rate-contribution date") +
+      dateInput("charlotteSavings", "Charlotte savings payment date") +
+      dateInput("charlotteRate", "Charlotte rate-contribution date") + '</div>' +
+    '<p class="mini">Expected October totals after applying: RWF 4,000 rate contributions and RWF 33,000 loan interest.</p>' +
     '<p class="hint">Existing matching payments are updated in place. Missing payments are added. Unrelated records are never changed, and applying this again will not duplicate these entries.</p>' +
     (problem ? '<div class="err">' + esc(problem) + '</div>' :
       '<p class="mini">' + (updates ? updates + ' record(s) will be added or corrected.' : 'These payments are already reconciled.') + '</p>');
@@ -2042,13 +2281,33 @@ async function onAct(act, el) {
       ": penalty accrued " + money(accrued) + ", rate contributions received " + money(paid));
     S.modal = null; toast("Manual rate adjustment saved"); return;
   }
-  if (act === "report-excel") { exportReportExcel(S.reportPeriod || S.period || thisPeriod()); return; }
+  if (act === "report-generate") {
+    const start = S.reportMode === "month" ? S.reportEnd : S.reportStart;
+    const end = S.reportEnd || start;
+    if (!validReportMonth(start) || !validReportMonth(end) || start > end) {
+      S.formErr = "Choose a valid reporting month range, with the ending month on or after the starting month.";
+      render();
+      return;
+    }
+    S.reportGeneratedStart = start;
+    S.reportGeneratedEnd = end;
+    S.reportGeneratedAt = todayISO();
+    render();
+    return;
+  }
+  if (act === "report-excel") {
+    if (S.reportGeneratedStart && S.reportGeneratedEnd)
+      exportReportExcel(buildReportData(S.reportGeneratedStart, S.reportGeneratedEnd));
+    return;
+  }
   if (act === "report-pdf") {
-    if (!isAdmin()) return;
-    const afterPrint = () => document.body.classList.remove("print-report");
-    window.addEventListener("afterprint", afterPrint, { once: true });
-    document.body.classList.add("print-report");
-    window.print();
+    if (isAdmin() && S.reportGeneratedStart && S.reportGeneratedEnd) {
+      try {
+        await exportReportPdf(buildReportData(S.reportGeneratedStart, S.reportGeneratedEnd));
+      } catch (error) {
+        toast("The report PDF could not be generated: " + error.message);
+      }
+    }
     return;
   }
   if (act === "download-loan-draft") {
@@ -2222,10 +2481,11 @@ async function onAct(act, el) {
       render();
       return;
     }
-    const wrongDays = Object.keys(BOOK_EXPECTED_CHARGEABLE_DAYS)
-      .filter(pid => totals.chargeableDays[pid] !== BOOK_EXPECTED_CHARGEABLE_DAYS[pid]);
-    if (totals.rates !== 500 || totals.interest !== 24900 || wrongDays.length) {
-      S.formErr = "The ledger changed since this dialog opened. Review rate totals, interest totals, and October contribution dates before applying corrections.";
+    const expectedDays = expectedOctoberChargeableDays();
+    const wrongDays = Object.keys(expectedDays)
+      .filter(pid => totals.chargeableDays[pid] !== expectedDays[pid]);
+    if (totals.rates !== 4000 || totals.interest !== 33000 || wrongDays.length) {
+      S.formErr = "The ledger changed since this dialog opened. Review rate totals, loan interest totals, and October payment dates before applying corrections.";
       render();
       return;
     }
@@ -2241,7 +2501,7 @@ async function onAct(act, el) {
       !plan.fees.some(u => u.id === f.id)).concat(plan.fees);
     S.repayments = S.repayments.filter(r => !plan.repayments.some(u => u.id === r.id)).concat(plan.repayments);
     S.savings = S.savings.filter(s => !plan.savings.some(u => u.id === s.id)).concat(plan.savings);
-    await logEvent("book-corrections", "Applied recorded October contributions, Deborah and Patrick rate payments, and first-month interest payments");
+    await logEvent("book-corrections", "Applied October savings, rate contributions, and loan-interest payments");
     S.modal = null;
     toast("Book payments reconciled");
     return;
@@ -2452,40 +2712,92 @@ async function exportCSV(period) {
   saveFile("savings-" + period + ".csv", csv, "text/csv");
 }
 
-function exportReportExcel(period) {
+function reportSummaryRows(report) {
+  const t = report.totals;
+  return [
+    ["Opening balance (derived)", report.openingBalance],
+    ["Savings contributions received", t.contributions],
+    ["Rate contributions received", t.ratePaid],
+    ["Loan interest earned", t.interestCollected],
+    ["Loans disbursed", t.loansDisbursed],
+    ["Loan repayments received", t.loanRepayments],
+    ["Outstanding loan balances at period end", t.loansOutstanding],
+    ["Expenses", t.cashExpenses],
+    ["Cash received", t.cashReceived],
+    ["Cash paid", t.cashPaid],
+    ["Net cash movement", t.netCashMovement],
+    ["Closing balance (derived)", report.closingBalance]
+  ];
+}
+
+function exportReportExcel(report) {
   if (!isAdmin()) return;
-  const report = buildReportData(period), t = report.totals;
-  const memberRows = report.people.map(row => '<tr><td>' + esc(row.person.name) + '</td>' +
-    '<td>' + row.required + '</td><td>' + row.contribution + '</td><td>' + row.savings +
-    '</td><td>' + row.chargeableDays + '</td><td>' + row.ratePaid + '</td><td>' + row.rateOutstanding +
+  const memberRows = report.people.map(row => '<tr><td>' + esc(row.person.name) + '</td><td>' +
+    row.contribution + '</td><td>' + row.loanInterestPaid + '</td><td>' + row.ratePaid +
     '</td><td>' + row.loanBalance + '</td></tr>').join("");
-  const loanRows = report.loans.map(row => '<tr><td>' + esc(row.person ? row.person.name : "Unknown") +
-    '</td><td>' + esc(row.loan.number || "Loan") + '</td><td>' +
-    esc(STATE_LABEL[row.loan.status] || row.loan.status || "Unknown") + '</td><td>' +
-    (Number(row.loan.principal) || 0) + '</td><td>' + row.interestPaid + '</td><td>' + row.balance +
-    '</td><td>' + esc(row.loan.requestedAt || "") + '</td><td>' + esc(row.loan.dueDate || "") + '</td></tr>').join("");
+  const transactionRows = report.rows.map(row => '<tr><td>' + esc(row.date) + '</td><td>' +
+    esc(row.member) + '</td><td>' + esc(row.category) + '</td><td>' + esc(row.details) +
+    '</td><td>' + row.amount + '</td><td>' + row.cashDelta + '</td></tr>').join("");
+  const summaryRows = reportSummaryRows(report).map(row =>
+    '<tr><td>' + esc(row[0]) + '</td><td>' + row[1] + '</td></tr>').join("");
   const content = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
     'body{font-family:Arial,sans-serif;color:#14221D}h1,h2{color:#1D5A47}table{border-collapse:collapse;margin-bottom:22px}' +
     'th,td{border:1px solid #CCD4CC;padding:6px;text-align:left}th{background:#DCE8E0} .num{text-align:right}</style></head><body>' +
-    '<h1>' + esc(cfg().groupName) + ' — Group report</h1><p>Contribution month: ' + esc(period) +
-    ' · Generated: ' + esc(todayISO()) + ' · Prepared by: ' + esc(me().name) + '</p>' +
+    '<h1>' + esc(cfg().groupName) + ' - Group financial report</h1><p>Period: ' + esc(report.start) + ' to ' + esc(report.end) +
+    ' · Generated: ' + esc(S.reportGeneratedAt || todayISO()) + ' · Prepared by: ' + esc(me().name) + '</p>' +
     '<h2>Summary</h2><table><thead><tr><th>Measure</th><th>Amount (RWF)</th></tr></thead><tbody>' +
-    '<tr><td>Contributions in period</td><td>' + t.contributions + '</td></tr>' +
-    '<tr><td>Expected contributions</td><td>' + t.required + '</td></tr>' +
-    '<tr><td>Member savings to date</td><td>' + t.savings + '</td></tr>' +
-    '<tr><td>Rate contributions received</td><td>' + t.ratePaid + '</td></tr>' +
-    '<tr><td>Rate outstanding</td><td>' + t.rateOutstanding + '</td></tr>' +
-    '<tr><td>Outstanding loan balances</td><td>' + t.loansOutstanding + '</td></tr>' +
-    '<tr><td>Interest collected</td><td>' + t.interestCollected + '</td></tr>' +
-    '<tr><td>Transaction costs (all time)</td><td>' + t.cashExpenses + '</td></tr>' +
-    '<tr><td>Cash available</td><td>' + t.cashAvailable + '</td></tr></tbody></table>' +
-    '<h2>Member balances</h2><table><thead><tr><th>Member</th><th>Monthly due</th><th>Contribution</th>' +
-    '<th>Savings to date</th><th>Chargeable days</th><th>Rate received</th><th>Rate outstanding</th><th>Loan balance</th>' +
+    summaryRows + '</tbody></table>' +
+    '<h2>Transactions</h2><table><thead><tr><th>Date</th><th>Member</th><th>Category</th><th>Details</th><th>Amount (RWF)</th><th>Cash movement (RWF)</th></tr></thead><tbody>' +
+    (transactionRows || '<tr><td colspan="6">No dated transactions in this reporting period.</td></tr>') + '</tbody></table>' +
+    '<h2>Member activity and balances</h2><table><thead><tr><th>Member</th><th>Savings contribution</th><th>Loan interest paid</th><th>Rate contribution</th><th>Loan balance at period end</th>' +
     '</tr></thead><tbody>' + memberRows + '</tbody></table>' +
-    '<h2>Loans</h2><table><thead><tr><th>Borrower</th><th>Loan</th><th>Status</th><th>Principal</th>' +
-    '<th>Interest paid</th><th>Balance</th><th>Requested</th><th>Due</th></tr></thead><tbody>' +
-    loanRows + '</tbody></table></body></html>';
-  saveFile("ikimina-report-" + period + ".xls", content, "application/vnd.ms-excel");
+    (report.undated.length ? '<p>Undated transactions excluded: ' + report.undated.length + '</p>' : '') + '</body></html>';
+  saveFile("ikimina-report-" + report.startPeriod + "-to-" + report.endPeriod + ".xls", content, "application/vnd.ms-excel");
+}
+
+async function exportReportPdf(report) {
+  if (!isAdmin()) return;
+  const lib = window.PDFLib;
+  if (!lib || !lib.PDFDocument) { toast("PDF generation is unavailable. Check your internet connection and try again."); return; }
+  const pdf = await lib.PDFDocument.create();
+  const font = await pdf.embedFont(lib.StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(lib.StandardFonts.HelveticaBold);
+  const green = lib.rgb(0.11, 0.35, 0.28);
+  const pageSize = [595.28, 841.89], margin = 42;
+  let page = pdf.addPage(pageSize), y = pageSize[1] - margin;
+  const writeLine = (text, size, isBold) => {
+    if (y < margin + 18) { page = pdf.addPage(pageSize); y = pageSize[1] - margin; }
+    page.drawText(pdfSafeText(text).slice(0, 130), { x: margin, y, size, font: isBold ? bold : font, color: green });
+    y -= size + 7;
+  };
+  writeLine(cfg().groupName + " - Group financial report", 16, true);
+  writeLine("Period: " + report.start + " to " + report.end, 10, false);
+  writeLine("Generated: " + (S.reportGeneratedAt || todayISO()) + " | Prepared by: " + me().name, 9, false);
+  y -= 8;
+  writeLine("Financial summary (RWF)", 12, true);
+  for (const [label, amount] of reportSummaryRows(report)) writeLine(label + ": " + num(amount), 9, false);
+  y -= 8;
+  writeLine("Transaction details", 12, true);
+  for (const row of report.rows) {
+    writeLine(row.date + " | " + row.member + " | " + row.category + " | " + row.details, 8, false);
+    writeLine("Amount: " + num(row.amount) + " RWF | Cash movement: " + num(row.cashDelta) + " RWF", 8, false);
+  }
+  y -= 8;
+  writeLine("Member activity and loan balances", 12, true);
+  for (const row of report.people) {
+    writeLine(row.person.name + ": savings " + num(row.contribution) + " RWF; loan interest " +
+      num(row.loanInterestPaid) + " RWF; rate contribution " + num(row.ratePaid) +
+      " RWF; loan balance " + num(row.loanBalance) + " RWF", 8, false);
+  }
+  if (report.undated.length) writeLine("Undated transactions excluded from period: " + report.undated.length, 9, true);
+  const bytes = await pdf.save(), blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob), link = document.createElement("a");
+  link.href = url;
+  link.download = "ikimina-report-" + report.startPeriod + "-to-" + report.endPeriod + ".pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 function saveFile(filename, content, mime) {
@@ -2750,9 +3062,32 @@ function wire() {
       });
       return;
     }
+    if (act === "book-date") {
+      el.addEventListener("change", () => {
+        if (!S.modal || S.modal.m !== "book-corrections") return;
+        if (!S.modal.paymentDates) S.modal.paymentDates = {};
+        S.modal.paymentDates[el.getAttribute("data-key")] = el.value;
+        S.formErr = null;
+        render();
+      });
+      return;
+    }
     if (act === "cash-expense-field") {
       el.addEventListener(el.type === "date" ? "change" : "input", () => {
         if (S.modal && S.modal.m === "cash-expense") S.modal[el.getAttribute("data-field")] = el.value;
+      });
+      return;
+    }
+    if (act === "report-mode" || act === "report-month" || act === "report-start" || act === "report-end") {
+      el.addEventListener("change", () => {
+        if (act === "report-mode") S.reportMode = el.value === "range" ? "range" : "month";
+        else if (act === "report-month") {
+          S.reportStart = el.value;
+          S.reportEnd = el.value;
+          S.reportPeriod = el.value;
+        } else if (act === "report-start") S.reportStart = el.value;
+        else S.reportEnd = el.value;
+        render();
       });
       return;
     }

@@ -17,11 +17,26 @@ function loadEnv(filePath) {
   return env;
 }
 
-const env = loadEnv(path.join(__dirname, '.env'));
+const env = Object.assign(loadEnv(path.join(__dirname, '.env')), process.env);
 const PORT = env.PORT || 3000;
 const root = __dirname;
 const envUrl = env.SUPABASE_URL || '';
-const envAnon = env.SUPABASE_ANON_KEY || '';
+const envPublishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '';
+
+function assertPublishableKey(key) {
+  if (key.startsWith('sb_secret_')) throw new Error('A Supabase secret key cannot be used in the browser app.');
+  if (key.startsWith('sb_publishable_')) return;
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString());
+  } catch (_) {
+    throw new Error('Use a Supabase publishable key or legacy anon public key.');
+  }
+  if (payload.role !== 'anon') {
+    throw new Error('Only a Supabase publishable key or legacy anon public key can be used in the browser app.');
+  }
+}
+if (envPublishableKey) assertPublishableKey(envPublishableKey);
 
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -52,8 +67,8 @@ function serveFile(filePath, res) {
 
 function injectEnvIntoLedger(filePath) {
   let html = fs.readFileSync(filePath, 'utf8');
-  html = html.replace(/__SUPABASE_URL__/, envUrl);
-  html = html.replace(/__SUPABASE_ANON_KEY__/, envAnon);
+  html = html.replace('"__SUPABASE_URL__"', JSON.stringify(envUrl));
+  html = html.replace('"__SUPABASE_PUBLISHABLE_KEY__"', JSON.stringify(envPublishableKey));
   return html;
 }
 
@@ -79,5 +94,5 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('Ikimina ledger running at http://localhost:' + PORT);
   console.log('Using SUPABASE_URL:', envUrl);
-  console.log('Using SUPABASE_ANON_KEY:', envAnon ? envAnon.slice(0, 20) + '...' : 'missing');
+  console.log('Supabase publishable key:', envPublishableKey ? 'configured' : 'missing');
 });

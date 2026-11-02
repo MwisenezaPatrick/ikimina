@@ -15,25 +15,30 @@ no paid tier of anything.
 3. In the left sidebar, open **SQL Editor** → **New query**.
 4. Paste in the entire contents of `schema.sql` from this folder and
    click **Run**. This creates every table the ledger needs.
-5. Go to **Project Settings** → **API**. You'll need two values from
-   this page in a moment: the **Project URL** and the **anon public**
-   key (not the `service_role` key — never put that one in a browser
-   page).
+5. Go to **Project Settings** → **API** and copy the **Project URL** and
+   **Publishable key**. A legacy **anon public** key also works. Never use
+   the `service_role` key or a Supabase secret key in this browser app.
 
 ## 2. Connect the ledger to your database
 
-Open `ledger.html` in a text editor (or VS Code) and find this block
-near the top:
+For GitHub Pages, add two repository **Actions variables** under
+**Settings → Secrets and variables → Actions → Variables**:
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. Use the project URL and
+publishable key from step 1. The Pages workflow injects them into the
+deployment artifact; the credentials are not committed to the repository.
+Publishable keys are intended to be visible to browsers and are protected
+by your database's Row Level Security policies. Do not put a `service_role`
+key or secret key in these variables.
 
-```html
-<script>
-window.SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
-window.SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
-</script>
+For local development, create an untracked `.env` file in the project root:
+
+```text
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR-PUBLISHABLE-KEY
 ```
 
-Replace both placeholder strings with the Project URL and anon key
-from step 1.5, save the file.
+Run `npm start`; the local server injects this public configuration at
+runtime. `.env` is ignored by Git. Do not commit it.
 
 ## 3. Try it locally
 
@@ -49,10 +54,14 @@ On October 17, this means 0 chargeable days for members paid by the 15th,
 2 for Eric and Charlotte, and 1 for Patrick.
 From then on the data lives in Supabase, not in the page.
 An admin can use **Apply recorded book payments** on the dashboard to
-reconcile these known October contribution dates, rate payments, and
-interest-only repayments in an existing ledger. Matching records are updated
-without duplicating them; conflicting October contribution records are flagged
-for review instead of overwritten.
+add the October book payments to an existing ledger, including Eric's RWF
+50,000 savings, RWF 2,000 rate contribution, and RWF 8,100 loan-interest
+payment, plus Charlotte's RWF 25,000 savings and RWF 1,500 rate contribution.
+The admin must enter the actual payment dates for these five entries. The
+dialog checks for October totals of RWF 4,000 in rate contributions and RWF
+33,000 in loan interest. Exact matching payments are left unchanged; conflicting
+or ambiguous records block reconciliation instead of being overwritten, and
+historical rate payments are preserved.
 
 The **Rate contributions** page calculates a 1% daily penalty on each
 contribution's unpaid balance starting on the 16th. A payment on or before the
@@ -89,9 +98,14 @@ A President can approve only a request waiting on the President. Officers can
 delete pending loan applications after confirmation; loans with repayments
 cannot be deleted. Pending loan rows show why approval is unavailable.
 President, Vice President, and Secretary accounts also have a **Reports** page.
-Choose a contribution month to review the group summary, member balances,
-chargeable days, and loans. Use **Save as PDF** to print or save the report as
-PDF, or **Download Excel** to export an Excel-compatible workbook file.
+Choose a month or a custom month range and select **Generate Report** to review
+dated financial transactions, savings, rate contributions, loan-interest
+repayments, disbursements, repayments, period-end loan balances, expenses, and
+calculated opening/closing cash balances. Historical records without dates are
+flagged and excluded from period totals; balances are derived from recorded
+cash flows because the ledger has no verified opening-balance record. Download
+the displayed report as PDF or Excel. The Savings page also shows loan
+interest paid separately from rate contributions.
 The President can record dated transaction costs, such as bank withdrawal or
 transfer charges, from the **Expenses** sidebar page. Costs reduce the main
 balance, cash available to lend, and unshared earnings, and are included in
