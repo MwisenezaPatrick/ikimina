@@ -116,9 +116,12 @@ add the October book payments to an existing ledger, including Eric's RWF
 payment, plus Charlotte's RWF 25,000 savings and RWF 1,500 rate contribution.
 The admin must enter the actual payment dates for these five entries. The
 dialog checks for October totals of RWF 4,000 in rate contributions and RWF
-33,000 in loan interest. Exact matching payments are left unchanged; conflicting
-or ambiguous records block reconciliation instead of being overwritten, and
-historical rate payments are preserved.
+33,000 in loan interest. If Jules's October savings row contains RWF 58,100,
+reconciliation records RWF 50,000 as savings and classifies the remaining
+RWF 8,100 as loan interest, without duplicating an existing interest payment.
+Other existing savings rows are preserved as recorded; conflicting or
+ambiguous target payments block reconciliation instead of being overwritten,
+and historical rate payments are preserved.
 
 The **Rate contributions** page calculates a 1% daily penalty on each
 contribution's unpaid balance starting on the 16th. A payment on or before the
