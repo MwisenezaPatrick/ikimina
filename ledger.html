@@ -1804,15 +1804,46 @@ function resetPwModal(m) {
 function quickSaveModal(m) {
   const people = activePeople();
   const pick = m.id || (people[0] && people[0].id);
+  const period = S.period || thisPeriod();
+  const existingRate = ratePaymentsForPeriod(pick, period);
+  const ratePayment = existingRate.length === 1 ? existingRate[0] : null;
   return {
     title: "Record a savings payment",
     body: '<label class="f"><span>Member</span><select id="q_person" data-act="qsync">' +
       people.map(p => '<option value="' + p.id + '"' + (pick === p.id ? " selected" : "") + '>' + esc(p.name) + ' \u00b7 ' + num(monthlyOf(p)) + '</option>').join("") + '</select></label>' +
-      '<div class="inline"><label class="f"><span>Month</span><input type="month" id="q_period" value="' + (S.period || thisPeriod()) + '"></label>' +
+      '<div class="inline"><label class="f"><span>Month</span><input type="month" id="q_period" data-act="qsync" value="' + period + '"></label>' +
       '<label class="f"><span>Amount received</span><input type="number" id="q_amount" value="' + monthlyOf(personById(pick)) + '"></label></div>' +
-      '<p class="hint">This replaces whatever is recorded for that member in that month.</p>',
+      '<div class="inline"><label class="f"><span>Rate contribution paid (separate)</span><input type="number" id="q_rate_amount" min="0" step="1" value="' +
+       (ratePayment ? Number(ratePayment.amount) || 0 : "") + '" placeholder="0"></label>' +
+       '<label class="f"><span>Rate contribution payment date</span><input type="date" id="q_rate_date" value="' +
+         esc(ratePayment && ratePayment.at ? ratePayment.at.slice(0, 10) : "") + '"></label></div>' +
+      '<p class="hint">Savings and rate contributions are recorded separately. This replaces the savings amount and, when entered, updates the single rate-contribution record for that member and month.</p>',
     foot: '<button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="quicksave">Record payment</button>'
   };
+}
+function ratePaymentsForPeriod(personId, period) {
+  return S.fees.filter(f => f.personId === personId && /rate/i.test(f.label || "") &&
+    (f.at || "").slice(0, 7) === period);
+}
+function undatedRatePayments(personId) {
+  return S.fees.filter(f => f.personId === personId && /rate/i.test(f.label || "") && !f.at);
+}
+function syncQuickSaveFields() {
+  const person = personById(val("q_person"));
+  const period = val("q_period");
+  if (person) {
+    const amount = $("#q_amount");
+    if (amount) amount.value = monthlyOf(person);
+  }
+  const ratePayments = ratePaymentsForPeriod(person && person.id, period);
+  const rateAmount = $("#q_rate_amount"), rateDate = $("#q_rate_date");
+  if (ratePayments.length === 1) {
+    if (rateAmount) rateAmount.value = Number(ratePayments[0].amount) || 0;
+    if (rateDate) rateDate.value = (ratePayments[0].at || "").slice(0, 10);
+  } else {
+    if (rateAmount) rateAmount.value = "";
+    if (rateDate) rateDate.value = "";
+  }
 }
 function ratePaymentsModal(m) {
   const p = personById(m.id);
@@ -2448,7 +2479,7 @@ async function onAct(act, el) {
   if (act === "ledger") { S.ledgerFor = id || null; S.route = "members"; window.scrollTo(0, 0); render(); return; }
   if (act === "per") { S.period = shiftPeriod(S.period || thisPeriod(), Number(el.getAttribute("data-d"))); render(); return; }
   if (act === "rquote") { refreshQuote(); return; }
-  if (act === "qsync") { const p = personById(val("q_person")); const a = $("#q_amount"); if (p && a) a.value = monthlyOf(p); return; }
+  if (act === "qsync") { syncQuickSaveFields(); return; }
   if (act === "seed") { await seedBook(); return; }
 
   /* ---- auth ---- */
@@ -2539,7 +2570,29 @@ async function onAct(act, el) {
   if (act === "quicksave") {
     const pid = val("q_person");
     if (!pid) { S.formErr = "Pick a member."; render(); return; }
-    await recordSaving(pid, val("q_period"), valn("q_amount"));
+    const period = val("q_period"), rateAmountText = val("q_rate_amount");
+    const rateAmount = rateAmountText === "" ? 0 : Number(rateAmountText);
+    if (rateAmountText !== "" && (!Number.isFinite(rateAmount) || rateAmount < 0)) {
+      S.formErr = "Enter a valid rate contribution amount."; render(); return;
+    }
+    if (rateAmount > 0) {
+      const rateDate = val("q_rate_date");
+      if (!rateDate || rateDate.slice(0, 7) !== period ||
+        !Number.isFinite(new Date(rateDate + "T00:00:00Z").getTime()) ||
+        new Date(rateDate + "T00:00:00Z").toISOString().slice(0, 10) !== rateDate) {
+        S.formErr = "Choose a valid rate contribution payment date within the selected month."; render(); return;
+      }
+      if (undatedRatePayments(pid).length) {
+        S.formErr = "An undated rate contribution already exists for this member; add its date on the Rate contributions page before recording another.";
+        render(); return;
+      }
+      if (ratePaymentsForPeriod(pid, period).length > 1) {
+        S.formErr = "More than one rate contribution is already recorded for this member and month; review the Rate contributions page first.";
+        render(); return;
+      }
+    }
+    await recordSaving(pid, period, valn("q_amount"));
+    if (rateAmount > 0) await recordRateContribution(pid, period, rateAmount, val("q_rate_date"));
     S.modal = null; return;
   }
   if (act === "apply-book-corrections") {
@@ -2774,6 +2827,21 @@ async function recordSaving(personId, period, amount) {
   const p = personById(personId);
   await logEvent("savings", (p ? p.name : "") + " \u00b7 " + fmtPeriod(period) + " \u00b7 " + money(amount));
   toast("Saved");
+}
+async function recordRateContribution(personId, period, amount, at) {
+  const existing = ratePaymentsForPeriod(personId, period);
+  if (existing.length > 1) throw new Error("More than one rate contribution is recorded for this member and month.");
+  const id = existing.length ? existing[0].id : "fee_" + personId + "_" + period;
+  const fee = {
+    ...(existing[0] || {}),
+    id, personId, amount: Math.round(amount), label: "Rate contribution (1%)", at
+  };
+  await put("fees/" + id, fee);
+  S.fees = S.fees.filter(item => item.id !== id).concat(fee);
+  const person = personById(personId);
+  await logEvent("rate", (person ? person.name : "") + " \u00b7 " + fmtPeriod(period) +
+    " \u00b7 rate contribution " + money(amount));
+  toast("Savings and rate contribution recorded separately");
 }
 
 async function exportCSV(period) {
