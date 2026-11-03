@@ -865,6 +865,7 @@ function navFor(role) {
     { k: "requested", label: "Requested Loan" }, { k: "reports", label: "Reports" },
     { k: "earnings", label: "Earnings" },
     ...(role === "president" ? [{ k: "expenses", label: "Expenses" }] : []),
+    { k: "activity", label: "Activity Logs" },
     { k: "profile", label: "Profile" }, { k: "settings", label: "Settings" }
   ];
 }
@@ -920,6 +921,7 @@ function page() {
     case "reports": return reportsView();
     case "earnings": return earningsView();
     case "expenses": return expensesView();
+    case "activity": return activityLogsView();
     case "profile": return profileView();
     case "settings": return settingsView();
     default: return isAdmin() ? adminDashboard() : memberDashboard();
@@ -1679,6 +1681,17 @@ function expensesView() {
     cashExpenseHistory();
 }
 
+function activityLogsView() {
+  if (!isAdmin()) return '<div class="panel"><div class="empty"><b>Activity logs are for officers</b>Sign in with an officer account to review ledger activity.</div></div>';
+  const events = S.events.slice().sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  return '<div class="pagehead"><div><h2>Activity Logs</h2><p>Ledger changes and actions, newest first.</p></div></div>' +
+    '<section class="panel"><header><div><h3>All activity</h3><p>' + num(events.length) + ' recorded actions</p></div></header>' +
+    (events.length ? '<div class="scroll"><table><thead><tr><th>Date</th><th>Action</th><th>Details</th><th>By</th></tr></thead><tbody>' +
+      events.map(e => '<tr><td class="mini" style="white-space:nowrap">' + fmtDate(e.at) + '</td><td>' + esc(e.action || "") +
+        '</td><td>' + esc(e.detail || "") + '</td><td class="mini">' + esc(e.by || "") + '</td></tr>').join("") +
+      '</tbody></table></div>' : '<div class="empty">Nothing recorded yet.</div>') + '</section>';
+}
+
 /* ============================================================
    Profile & settings
    ============================================================ */
@@ -2005,6 +2018,19 @@ function bookCorrectionsPlan() {
     });
   }
   const fees = [], feeDeletions = [], repayments = [], savings = historicalSavings.slice();
+
+  const legacyChadiaFees = S.fees.filter(f => f.personId === "chadia" && /rate/i.test(f.label || ""));
+  if (legacyChadiaFees.length > 1) {
+    throw new Error("Multiple rate contributions are recorded for Chadia; review them before replacing the known legacy entry.");
+  }
+  if (legacyChadiaFees.length === 1) {
+    const oldChadiaFee = legacyChadiaFees[0];
+    if (oldChadiaFee.id !== "fee_chadia" || Number(oldChadiaFee.amount) !== 250 ||
+      (oldChadiaFee.at || "").slice(0, 10) !== "2026-09-01") {
+      throw new Error("Chadia's existing rate contribution differs from the known obsolete RWF 250 entry; review it before changing it.");
+    }
+    feeDeletions.push(oldChadiaFee);
+  }
 
   for (const spec of octoberSavingsSpecs) {
     const matches = S.savings.filter(s => s.personId === spec.personId && s.period === spec.period);
